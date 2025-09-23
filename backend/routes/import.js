@@ -48,41 +48,50 @@ router.post('/users', authenticateToken, requireRole(['advisor']), upload.single
             const rowNumber = i + 2; // +2 because CSV starts from row 2 (row 1 is header)
 
             try {
+              // Clean BOM from field names
+              const cleanRow = {};
+              Object.keys(row).forEach(key => {
+                const cleanKey = key.replace(/^\uFEFF/, ''); // Remove BOM
+                cleanRow[cleanKey] = row[key];
+              });
+              
               // Validate required fields
-              if (!row.firstName || !row.lastName || !row.phone || !row.role) {
+              if (!cleanRow.firstName || !cleanRow.lastName || !cleanRow.phone || !cleanRow.role) {
                 errors.push(`Row ${rowNumber}: ข้อมูลที่จำเป็นไม่ครบถ้วน (firstName, lastName, phone, role)`);
                 errorCount++;
                 continue;
               }
 
               // Validate role
-              if (!['student', 'advisor'].includes(row.role)) {
+              if (!['student', 'advisor'].includes(cleanRow.role)) {
                 errors.push(`Row ${rowNumber}: role ต้องเป็น 'student' หรือ 'advisor'`);
                 errorCount++;
                 continue;
               }
 
-              // Check if phone already exists
-              const phoneCheck = await pool.query(
-                'SELECT id FROM users WHERE phone = $1',
-                [row.phone]
-              );
+              // Check if phone already exists (skip for students with same phone)
+              if (cleanRow.role === 'advisor') {
+                const phoneCheck = await pool.query(
+                  'SELECT id FROM users WHERE phone = $1',
+                  [cleanRow.phone]
+                );
 
-              if (phoneCheck.rows.length > 0) {
-                errors.push(`Row ${rowNumber}: เบอร์โทรศัพท์ ${row.phone} ถูกใช้งานแล้ว`);
-                errorCount++;
-                continue;
+                if (phoneCheck.rows.length > 0) {
+                  errors.push(`Row ${rowNumber}: เบอร์โทรศัพท์ ${cleanRow.phone} ถูกใช้งานแล้ว`);
+                  errorCount++;
+                  continue;
+                }
               }
 
               // Check if student ID already exists (if provided)
-              if (row.studentId) {
+              if (cleanRow.studentId) {
                 const studentIdCheck = await pool.query(
                   'SELECT id FROM users WHERE student_id = $1',
-                  [row.studentId]
+                  [cleanRow.studentId]
                 );
 
                 if (studentIdCheck.rows.length > 0) {
-                  errors.push(`Row ${rowNumber}: เลขนักศึกษา ${row.studentId} ถูกใช้งานแล้ว`);
+                  errors.push(`Row ${rowNumber}: เลขนักศึกษา ${cleanRow.studentId} ถูกใช้งานแล้ว`);
                   errorCount++;
                   continue;
                 }
@@ -90,16 +99,17 @@ router.post('/users', authenticateToken, requireRole(['advisor']), upload.single
 
               // Insert user
               await pool.query(
-                `INSERT INTO users (student_id, first_name, last_name, phone, email, office, role)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                `INSERT INTO users (student_id, first_name, last_name, phone, email, office, role, major)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
                 [
-                  row.studentId || null,
-                  row.firstName,
-                  row.lastName,
-                  row.phone,
-                  row.email || null,
-                  row.office || null,
-                  row.role
+                  cleanRow.studentId || null,
+                  cleanRow.firstName,
+                  cleanRow.lastName,
+                  cleanRow.phone,
+                  cleanRow.email || null,
+                  cleanRow.office || null,
+                  cleanRow.role,
+                  cleanRow.major || null
                 ]
               );
 
