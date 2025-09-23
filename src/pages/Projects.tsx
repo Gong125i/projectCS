@@ -9,7 +9,8 @@ import {
   Users, 
   UserPlus, 
   UserMinus,
-  FolderOpen
+  FolderOpen,
+  Eye
 } from 'lucide-react';
 
 const Projects: React.FC = () => {
@@ -28,16 +29,28 @@ const Projects: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [user]);
 
   const fetchData = async () => {
     try {
-      const [projectsData, usersData] = await Promise.all([
-        projectAPI.getProjects(),
-        userAPI.getUsers()
-      ]);
-      setProjects(projectsData);
-      setUsers(usersData);
+      const promises = [
+        projectAPI.getProjects()
+      ];
+      
+      // Only fetch users if user is advisor
+      if (user?.role === 'advisor') {
+        promises.push(userAPI.getUsers());
+      }
+      
+      const results = await Promise.all(promises);
+      setProjects(results[0]);
+      
+      // Set users only if user is advisor
+      if (user?.role === 'advisor') {
+        setUsers(results[1]);
+      } else {
+        setUsers([]);
+      }
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -89,11 +102,14 @@ const Projects: React.FC = () => {
     
     try {
       await projectAPI.inviteStudent(selectedProject.id, inviteStudentId);
+      alert('เชิญนักศึกษาเข้าร่วมโครงงานเรียบร้อยแล้ว');
       setShowInviteModal(false);
       setInviteStudentId('');
       fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to invite student:', error);
+      const errorMessage = error.response?.data?.message || 'เกิดข้อผิดพลาดในการเชิญนักศึกษา';
+      alert(`ข้อผิดพลาด: ${errorMessage}`);
     }
   };
 
@@ -121,7 +137,9 @@ const Projects: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">จัดการโครงงาน</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {user?.role === 'advisor' ? 'จัดการโครงงาน' : 'โครงงานที่รับผิดชอบ'}
+        </h1>
         {user?.role === 'advisor' && (
           <button
             onClick={() => setShowCreateModal(true)}
@@ -135,8 +153,8 @@ const Projects: React.FC = () => {
 
       {/* Projects List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {projects.map((project) => (
-          <div key={project.id} className="bg-white rounded-lg shadow-md p-6">
+        {projects.map((project, index) => (
+          <div key={`project-${project.id}-${index}`} className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center">
                 <FolderOpen className="h-6 w-6 text-blue-600 mr-2" />
@@ -170,49 +188,91 @@ const Projects: React.FC = () => {
               <p className="text-sm text-gray-600 mb-2">
                 <strong>อาจารย์ที่ปรึกษา:</strong> {project.advisor.firstName} {project.advisor.lastName}
               </p>
-              <p className="text-sm text-gray-600">
-                <strong>นักศึกษา:</strong> {project.students.length} คน
-              </p>
+              {user?.role === 'advisor' ? (
+                <p className="text-sm text-gray-600">
+                  <strong>นักศึกษา:</strong> {project.students.length} คน
+                </p>
+              ) : (
+                <p className="text-sm text-gray-600">
+                  <strong>สถานะ:</strong> 
+                  <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    project.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                    project.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    project.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                    project.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {project.status === 'accepted' ? 'รับแล้ว' :
+                     project.status === 'pending' ? 'รอดำเนินการ' :
+                     project.status === 'rejected' ? 'ปฏิเสธ' :
+                     project.status === 'completed' ? 'เสร็จสิ้น' :
+                     project.status}
+                  </span>
+                </p>
+              )}
             </div>
 
-            {/* Students List */}
-            {project.students.length > 0 && (
+            {/* Students List - Only show for advisors */}
+            {user?.role === 'advisor' && project.students.length > 0 && (
               <div className="mb-4">
                 <h4 className="text-sm font-medium text-gray-900 mb-2">รายชื่อนักศึกษา:</h4>
                 <div className="space-y-1">
-                  {project.students.map((student) => (
-                    <div key={student.id} className="flex items-center justify-between text-sm">
+                  {project.students.map((student, studentIndex) => (
+                    <div key={`student-${student.id}-${studentIndex}`} className="flex items-center justify-between text-sm">
                       <span className="text-gray-600">
                         {student.firstName} {student.lastName} {student.studentId && `(${student.studentId})`}
                       </span>
-                      {user?.role === 'advisor' && (
-                        <button
-                          onClick={() => handleRemoveStudent(project.id, student.id)}
-                          className="text-red-600 hover:text-red-800"
-                          title="ลบนักศึกษา"
-                        >
-                          <UserMinus className="h-3 w-3" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleRemoveStudent(project.id, student.id)}
+                        className="text-red-600 hover:text-red-800"
+                        title="ลบนักศึกษา"
+                      >
+                        <UserMinus className="h-3 w-3" />
+                      </button>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Invite Student Button */}
-            {user?.role === 'advisor' && (
+            {/* Student Info - Only show for students */}
+            {user?.role === 'student' && (
+              <div className="mb-4">
+                <div className="text-sm text-gray-600">
+                  <p><strong>รหัสนักศึกษา:</strong> {user.studentId}</p>
+                  <p><strong>ชื่อ-นามสกุล:</strong> {user.firstName} {user.lastName}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="space-y-2">
+              {/* View Details Button */}
               <button
                 onClick={() => {
-                  setSelectedProject(project);
-                  setShowInviteModal(true);
+                  // Navigate to project details page
+                  window.location.href = `/projects/${project.id}`;
                 }}
                 className="w-full inline-flex items-center justify-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                <UserPlus className="h-4 w-4 mr-2" />
-                เชิญนักศึกษา
+                <Eye className="h-4 w-4 mr-2" />
+                ดูรายละเอียด
               </button>
-            )}
+              
+              {/* Invite Student Button - Only for advisors */}
+              {user?.role === 'advisor' && (
+                <button
+                  onClick={() => {
+                    setSelectedProject(project);
+                    setShowInviteModal(true);
+                  }}
+                  className="w-full inline-flex items-center justify-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  เชิญนักศึกษา
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

@@ -1,19 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { appointmentAPI, userAPI } from '../services/api';
-import type { Appointment, User } from '../types/index.js';
+import { appointmentAPI, projectAPI } from '../services/api';
+import type { Appointment, Project } from '../types/index.js';
 import { 
   Plus, 
   Calendar, 
   Clock, 
   MapPin, 
-  User as UserIcon,
   Edit, 
   Trash2, 
   CheckCircle, 
   XCircle,
-  AlertCircle,
-  MessageSquare
+  AlertCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -21,7 +19,7 @@ import { th } from 'date-fns/locale';
 const Appointments: React.FC = () => {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -31,36 +29,77 @@ const Appointments: React.FC = () => {
     time: '',
     location: '',
     notes: '',
-    advisorId: '',
-    studentId: '',
     projectId: ''
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const [appointmentsData, usersData] = await Promise.all([
+      const [appointmentsData, projectsData] = await Promise.all([
         appointmentAPI.getAppointments(),
-        userAPI.getUsers()
+        projectAPI.getProjects()
       ]);
-      setAppointments(appointmentsData);
-      setUsers(usersData);
+      
+      // Remove duplicates based on ID
+      const uniqueAppointments = appointmentsData.filter((appointment, index, self) => 
+        index === self.findIndex(a => a.id === appointment.id)
+      );
+      
+      setAppointments(uniqueAppointments);
+      setProjects(projectsData);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
 
   const handleCreateAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await appointmentAPI.createAppointment(formData);
+      let appointmentData;
+      
+      if (user?.role === 'advisor') {
+        // Advisor creates project-based appointment
+        appointmentData = {
+          ...formData,
+          advisorId: user.id
+        };
+      } else if (user) {
+        // Student creates appointment to their advisor
+        // Find the student's project
+        const studentProject = projects.find(project => 
+          project.students?.some(student => student.id === user.id)
+        );
+        
+        if (!studentProject) {
+          alert('คุณยังไม่ได้เข้าร่วมโปรเจคใดๆ กรุณาติดต่ออาจารย์ที่ปรึกษา');
+          return;
+        }
+        
+        appointmentData = {
+          date: formData.date,
+          time: formData.time,
+          location: formData.location,
+          notes: formData.notes,
+          advisorId: studentProject.advisorId,
+          projectId: studentProject.id
+        };
+      }
+      
+      if (!appointmentData) {
+        alert('เกิดข้อผิดพลาดในการสร้างนัดหมาย');
+        return;
+      }
+      
+      await appointmentAPI.createAppointment(appointmentData);
       setShowCreateModal(false);
-      setFormData({ date: '', time: '', location: '', notes: '', advisorId: '', studentId: '', projectId: '' });
+      setFormData({ date: '', time: '', location: '', notes: '', projectId: '' });
       fetchData();
     } catch (error) {
       console.error('Failed to create appointment:', error);
@@ -72,10 +111,45 @@ const Appointments: React.FC = () => {
     if (!selectedAppointment) return;
     
     try {
-      await appointmentAPI.updateAppointment(selectedAppointment.id, formData);
+      let appointmentData;
+      
+      if (user?.role === 'advisor') {
+        // Advisor updates appointment
+        appointmentData = {
+          ...formData,
+          date: new Date(formData.date),
+          advisorId: user.id
+        };
+      } else if (user) {
+        // Student updates appointment
+        const studentProject = projects.find(project => 
+          project.students?.some(student => student.id === user.id)
+        );
+        
+        if (!studentProject) {
+          alert('คุณยังไม่ได้เข้าร่วมโปรเจคใดๆ กรุณาติดต่ออาจารย์ที่ปรึกษา');
+          return;
+        }
+        
+        appointmentData = {
+          date: new Date(formData.date),
+          time: formData.time,
+          location: formData.location,
+          notes: formData.notes,
+          advisorId: studentProject.advisorId,
+          projectId: studentProject.id
+        };
+      }
+      
+      if (!appointmentData) {
+        alert('เกิดข้อผิดพลาดในการแก้ไขนัดหมาย');
+        return;
+      }
+      
+      await appointmentAPI.updateAppointment(selectedAppointment.id, appointmentData);
       setShowEditModal(false);
       setSelectedAppointment(null);
-      setFormData({ date: '', time: '', location: '', notes: '', advisorId: '', studentId: '', projectId: '' });
+      setFormData({ date: '', time: '', location: '', notes: '', projectId: '' });
       fetchData();
     } catch (error) {
       console.error('Failed to update appointment:', error);
@@ -106,6 +180,33 @@ const Appointments: React.FC = () => {
     }
   };
 
+  const handleStudentAccept = async (appointmentId: string) => {
+    try {
+      await appointmentAPI.studentAcceptAppointment(appointmentId);
+      fetchData();
+    } catch (error) {
+      console.error('Student accept error:', error);
+    }
+  };
+
+  const handleStudentReject = async (appointmentId: string) => {
+    try {
+      await appointmentAPI.studentRejectAppointment(appointmentId);
+      fetchData();
+    } catch (error) {
+      console.error('Student reject error:', error);
+    }
+  };
+
+  const handleAttendanceConfirmation = async (appointmentId: string, status: 'completed' | 'failed') => {
+    try {
+      await appointmentAPI.updateAppointmentStatus(appointmentId, status);
+      fetchData();
+    } catch (error) {
+      console.error('Failed to update attendance status:', error);
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'confirmed':
@@ -114,29 +215,41 @@ const Appointments: React.FC = () => {
         return <XCircle className="h-5 w-5 text-red-500" />;
       case 'pending':
         return <AlertCircle className="h-5 w-5 text-yellow-500" />;
+      case 'completed':
+        return <CheckCircle className="h-5 w-5 text-green-600" />;
+      case 'failed':
+        return <XCircle className="h-5 w-5 text-red-600" />;
       default:
         return <Clock className="h-5 w-5 text-gray-500" />;
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: string, appointment: any) => {
     switch (status) {
       case 'confirmed':
         return 'ยืนยันแล้ว';
       case 'rejected':
         return 'ปฏิเสธ';
       case 'pending':
-        return 'รอการยืนยัน';
+        // Check who created the appointment
+        if (appointment.studentId && appointment.studentId !== null) {
+          // Student created appointment, waiting for advisor
+          return 'รอการยืนยันจากอาจารย์';
+        } else {
+          // Advisor created appointment, waiting for student
+          return 'รอการยืนยันจากนักศึกษา';
+        }
       case 'cancelled':
         return 'ยกเลิก';
       case 'completed':
         return 'เสร็จสิ้น';
+      case 'failed':
+        return 'ไม่มาตามนัด';
       default:
         return status;
     }
   };
 
-  const filteredUsers = users.filter(u => u.role !== user?.role);
 
   if (loading) {
     return (
@@ -159,10 +272,13 @@ const Appointments: React.FC = () => {
         </button>
       </div>
 
+
       {/* Appointments List */}
       <div className="bg-white shadow overflow-hidden sm:rounded-md">
         <ul className="divide-y divide-gray-200">
-          {appointments.map((appointment) => (
+          {appointments
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .map((appointment) => (
             <li key={appointment.id}>
               <div className="px-4 py-4 sm:px-6">
                 <div className="flex items-center justify-between">
@@ -171,9 +287,13 @@ const Appointments: React.FC = () => {
                     <div className="ml-4">
                       <div className="flex items-center">
                         <p className="text-sm font-medium text-gray-900">
-                          {user?.role === 'student' 
-                            ? appointment.advisor.firstName + ' ' + appointment.advisor.lastName
-                            : appointment.student.firstName + ' ' + appointment.student.lastName
+                          {appointment.project 
+                            ? `โปรเจค: ${appointment.project.name}`
+                            : user?.role === 'student' 
+                              ? `อาจารย์ที่ปรึกษา: ${appointment.advisor.firstName} ${appointment.advisor.lastName}`
+                              : appointment.student 
+                                ? `${appointment.student.firstName} ${appointment.student.lastName}`
+                                : 'ไม่ระบุผู้ใช้'
                           }
                         </p>
                         <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -182,7 +302,7 @@ const Appointments: React.FC = () => {
                           appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
-                          {getStatusText(appointment.status)}
+                          {getStatusText(appointment.status, appointment)}
                         </span>
                       </div>
                       <div className="mt-2 sm:flex sm:justify-between">
@@ -209,7 +329,7 @@ const Appointments: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {appointment.status === 'pending' && user?.role === 'advisor' && (
+                    {appointment.status === 'pending' && user?.role === 'advisor' && appointment.studentId && (
                       <>
                         <button
                           onClick={() => handleStatusChange(appointment.id, 'confirm')}
@@ -227,32 +347,71 @@ const Appointments: React.FC = () => {
                         </button>
                       </>
                     )}
-                    <button
-                      onClick={() => {
-                        setSelectedAppointment(appointment);
-                        setFormData({
-                          date: format(new Date(appointment.date), 'yyyy-MM-dd'),
-                          time: appointment.time,
-                          location: appointment.location,
-                          notes: appointment.notes || '',
-                          advisorId: appointment.advisorId,
-                          studentId: appointment.studentId,
-                          projectId: appointment.projectId || ''
-                        });
-                        setShowEditModal(true);
-                      }}
-                      className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200"
-                    >
-                      <Edit className="h-3 w-3 mr-1" />
-                      แก้ไข
-                    </button>
-                    <button
-                      onClick={() => handleDeleteAppointment(appointment.id)}
-                      className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
-                    >
-                      <Trash2 className="h-3 w-3 mr-1" />
-                      ลบ
-                    </button>
+                    {appointment.status === 'pending' && user?.role === 'student' && !appointment.studentId && (
+                      <>
+                        <button
+                          onClick={() => handleStudentAccept(appointment.id)}
+                          className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-green-700 bg-green-100 hover:bg-green-200"
+                        >
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          ยอมรับ
+                        </button>
+                        <button
+                          onClick={() => handleStudentReject(appointment.id)}
+                          className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
+                        >
+                          <XCircle className="h-3 w-3 mr-1" />
+                          ปฏิเสธ
+                        </button>
+                      </>
+                    )}
+                    {appointment.status === 'confirmed' && user?.role === 'advisor' && (
+                      <>
+                        <button
+                          onClick={() => handleAttendanceConfirmation(appointment.id, 'completed')}
+                          className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-green-700 bg-green-100 hover:bg-green-200"
+                        >
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          มาตามนัด
+                        </button>
+                        <button
+                          onClick={() => handleAttendanceConfirmation(appointment.id, 'failed')}
+                          className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
+                        >
+                          <XCircle className="h-3 w-3 mr-1" />
+                          ไม่มาตามนัด
+                        </button>
+                      </>
+                    )}
+                    {/* แสดงปุ่มแก้ไขและลบเฉพาะเมื่อนัดหมายยังไม่เสร็จสิ้นหรือถูกปฏิเสธ */}
+                    {!['completed', 'failed', 'rejected'].includes(appointment.status) && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedAppointment(appointment);
+                            setFormData({
+                              date: format(new Date(appointment.date), 'yyyy-MM-dd'),
+                              time: appointment.time,
+                              location: appointment.location,
+                              notes: appointment.notes || '',
+                              projectId: appointment.projectId || ''
+                            });
+                            setShowEditModal(true);
+                          }}
+                          className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200"
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          แก้ไข
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAppointment(appointment.id)}
+                          className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" />
+                          ลบ
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -307,27 +466,27 @@ const Appointments: React.FC = () => {
                     rows={3}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    {user?.role === 'student' ? 'อาจารย์ที่ปรึกษา' : 'นักศึกษา'}
-                  </label>
-                  <select
-                    required
-                    value={user?.role === 'student' ? formData.advisorId : formData.studentId}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      [user?.role === 'student' ? 'advisorId' : 'studentId']: e.target.value
-                    })}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">เลือก{user?.role === 'student' ? 'อาจารย์ที่ปรึกษา' : 'นักศึกษา'}</option>
-                    {filteredUsers.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.firstName} {u.lastName} {u.studentId ? `(${u.studentId})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {user?.role === 'advisor' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">โปรเจค</label>
+                    <select
+                      required
+                      value={formData.projectId}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        projectId: e.target.value
+                      })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">เลือกโปรเจค</option>
+                      {projects.map((project, index) => (
+                        <option key={`project-${project.id}-${index}`} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="flex justify-end space-x-3">
                   <button
                     type="button"
@@ -395,6 +554,27 @@ const Appointments: React.FC = () => {
                     rows={3}
                   />
                 </div>
+                {user?.role === 'advisor' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">โปรเจค</label>
+                    <select
+                      required
+                      value={formData.projectId}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        projectId: e.target.value
+                      })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">เลือกโปรเจค</option>
+                      {projects.map((project, index) => (
+                        <option key={`project-${project.id}-${index}`} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="flex justify-end space-x-3">
                   <button
                     type="button"

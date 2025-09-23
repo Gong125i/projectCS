@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { userAPI } from '../services/api';
 import type { User } from '../types/index.js';
-import { User as UserIcon, Phone, Mail, MapPin, Save } from 'lucide-react';
+import { User as UserIcon, Phone, Mail, MapPin, Save, Lock, ArrowRight, GraduationCap } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { getMajorName } from '../utils/majorUtils';
 
 const Profile: React.FC = () => {
   const { user, updateUser } = useAuth();
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -58,13 +61,22 @@ const Profile: React.FC = () => {
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-900">โปรไฟล์</h1>
             {!isEditing && (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <UserIcon className="h-4 w-4 mr-2" />
-                แก้ไข
-              </button>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => navigate('/change-password')}
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Lock className="h-4 w-4 mr-2" />
+                  เปลี่ยนรหัสผ่าน
+                </button>
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <UserIcon className="h-4 w-4 mr-2" />
+                  แก้ไข
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -208,6 +220,18 @@ const Profile: React.FC = () => {
                   <p className="text-sm text-gray-900">{user.phone}</p>
                 </div>
               </div>
+
+              {user.major && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    สาขาวิชา
+                  </label>
+                  <div className="flex items-center">
+                    <GraduationCap className="h-5 w-5 text-gray-400 mr-2" />
+                    <p className="text-sm text-gray-900">{getMajorName(user.major)}</p>
+                  </div>
+                </div>
+              )}
 
               {user.role === 'advisor' && (
                 <>

@@ -39,6 +39,14 @@ export const authAPI = {
     const response = await api.get<ApiResponse<User>>('/auth/me');
     return response.data.data!;
   },
+
+  changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+    await api.put('/auth/change-password', { currentPassword, newPassword });
+  },
+
+  resetPassword: async (user: string, newPassword: string): Promise<void> => {
+    await api.post('/auth/reset-password', { user, newPassword });
+  },
 };
 
 // User API
@@ -63,6 +71,11 @@ export const projectAPI = {
   
   getProjects: async (): Promise<Project[]> => {
     const response = await api.get<ApiResponse<Project[]>>('/projects');
+    return response.data.data!;
+  },
+  
+  getProject: async (projectId: string): Promise<Project> => {
+    const response = await api.get<ApiResponse<Project>>(`/projects/${projectId}`);
     return response.data.data!;
   },
   
@@ -131,6 +144,26 @@ export const appointmentAPI = {
   
   completeAppointment: async (appointmentId: string): Promise<Appointment> => {
     const response = await api.put<ApiResponse<Appointment>>(`/appointments/${appointmentId}/complete`);
+    return response.data.data!;
+  },
+  
+  getProjectAppointments: async (projectId: string): Promise<Appointment[]> => {
+    const response = await api.get<ApiResponse<Appointment[]>>(`/appointments/project/${projectId}`);
+    return response.data.data!;
+  },
+
+  studentAcceptAppointment: async (appointmentId: string): Promise<Appointment> => {
+    const response = await api.put<ApiResponse<Appointment>>(`/appointments/${appointmentId}/accept`);
+    return response.data.data!;
+  },
+
+  studentRejectAppointment: async (appointmentId: string, reason?: string): Promise<Appointment> => {
+    const response = await api.put<ApiResponse<Appointment>>(`/appointments/${appointmentId}/student-reject`, { reason });
+    return response.data.data!;
+  },
+
+  updateAppointmentStatus: async (appointmentId: string, status: string): Promise<Appointment> => {
+    const response = await api.put<ApiResponse<Appointment>>(`/appointments/${appointmentId}/status`, { status });
     return response.data.data!;
   },
 };

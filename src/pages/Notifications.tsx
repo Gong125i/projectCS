@@ -79,9 +79,9 @@ const Notifications: React.FC = () => {
         </div>
 
         <div className="divide-y divide-gray-200">
-          {notifications.map((notification) => (
+          {notifications.map((notification, index) => (
             <div
-              key={notification.id}
+              key={`notification-${notification.id}-${notification.createdAt}-${index}`}
               className={`p-6 hover:bg-gray-50 transition-colors ${
                 notification.isRead ? 'bg-gray-50' : 'bg-white'
               }`}

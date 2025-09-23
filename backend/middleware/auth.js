@@ -17,7 +17,7 @@ const authenticateToken = async (req, res, next) => {
     
     // Get user from database
     const result = await pool.query(
-      'SELECT id, student_id, first_name, last_name, phone, email, office, role FROM users WHERE id = $1',
+      'SELECT id, student_id, first_name, last_name, phone, email, office, major, role FROM users WHERE id = $1',
       [decoded.userId]
     );
 

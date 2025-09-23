@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import { appointmentAPI, projectAPI } from '../services/api';
-import type { Appointment, Project } from '../types/index.js';
+import type { Appointment, Project } from '../types/index';
 import { 
   Calendar, 
   Clock, 
   MapPin, 
-  User, 
   FolderOpen, 
   Bell,
   CheckCircle,
@@ -24,33 +23,73 @@ const Dashboard: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [appointmentsData, projectsData] = await Promise.all([
-          appointmentAPI.getAppointments(),
-          projectAPI.getProjects()
-        ]);
-        setAppointments(appointmentsData);
-        setProjects(projectsData);
-      } catch (error) {
-        console.error('Failed to fetch dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchData = async () => {
+    try {
+      const [appointmentsData, projectsData] = await Promise.all([
+        appointmentAPI.getAppointments(),
+        projectAPI.getProjects()
+      ]);
+      setAppointments(appointmentsData);
+      setProjects(projectsData);
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
   }, []);
 
   const upcomingAppointments = appointments
     .filter(apt => apt.status === 'confirmed' || apt.status === 'pending')
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 5);
 
   const recentNotifications = notifications
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 3);
+
+  const handleStatusChange = async (appointmentId: string, status: 'confirm' | 'reject') => {
+    try {
+      if (status === 'confirm') {
+        await appointmentAPI.confirmAppointment(appointmentId);
+      } else {
+        await appointmentAPI.rejectAppointment(appointmentId);
+      }
+      fetchData();
+    } catch (error) {
+      console.error('Failed to update appointment status:', error);
+    }
+  };
+
+  const handleStudentAccept = async (appointmentId: string) => {
+    try {
+      await appointmentAPI.studentAcceptAppointment(appointmentId);
+      fetchData();
+    } catch (error) {
+      console.error('Student accept error:', error);
+    }
+  };
+
+  const handleStudentReject = async (appointmentId: string) => {
+    try {
+      await appointmentAPI.studentRejectAppointment(appointmentId);
+      fetchData();
+    } catch (error) {
+      console.error('Student reject error:', error);
+    }
+  };
+
+  const handleAttendanceConfirmation = async (appointmentId: string, status: 'completed' | 'failed') => {
+    try {
+      await appointmentAPI.updateAppointmentStatus(appointmentId, status);
+      fetchData();
+    } catch (error) {
+      console.error('Failed to update attendance status:', error);
+    }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -60,23 +99,36 @@ const Dashboard: React.FC = () => {
         return <XCircle className="h-5 w-5 text-red-500" />;
       case 'pending':
         return <AlertCircle className="h-5 w-5 text-yellow-500" />;
+      case 'completed':
+        return <CheckCircle className="h-5 w-5 text-green-600" />;
+      case 'failed':
+        return <XCircle className="h-5 w-5 text-red-600" />;
       default:
         return <Clock className="h-5 w-5 text-gray-500" />;
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: string, appointment: any) => {
     switch (status) {
       case 'confirmed':
         return 'ยืนยันแล้ว';
       case 'rejected':
         return 'ปฏิเสธ';
       case 'pending':
-        return 'รอการยืนยัน';
+        // Check who created the appointment
+        if (appointment.studentId && appointment.studentId !== null) {
+          // Student created appointment, waiting for advisor
+          return 'รอการยืนยันจากอาจารย์';
+        } else {
+          // Advisor created appointment, waiting for student
+          return 'รอการยืนยันจากนักศึกษา';
+        }
       case 'cancelled':
         return 'ยกเลิก';
       case 'completed':
         return 'เสร็จสิ้น';
+      case 'failed':
+        return 'ไม่มาตามนัด';
       default:
         return status;
     }
@@ -166,15 +218,19 @@ const Dashboard: React.FC = () => {
           <div className="p-6">
             {upcomingAppointments.length > 0 ? (
               <div className="space-y-4">
-                {upcomingAppointments.map((appointment) => (
-                  <div key={appointment.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                {upcomingAppointments.map((appointment, index) => (
+                  <div key={`upcoming-${appointment.id}-${appointment.date}-${appointment.time}-${index}`} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                     <div className="flex-1">
                       <div className="flex items-center space-x-2">
                         {getStatusIcon(appointment.status)}
                         <span className="text-sm font-medium text-gray-900">
-                          {user?.role === 'student' 
-                            ? appointment.advisor.firstName + ' ' + appointment.advisor.lastName
-                            : appointment.student.firstName + ' ' + appointment.student.lastName
+                          {appointment.project 
+                            ? `โปรเจค: ${appointment.project.name}`
+                            : user?.role === 'student' 
+                              ? `อาจารย์ที่ปรึกษา: ${appointment.advisor.firstName} ${appointment.advisor.lastName}`
+                              : appointment.student 
+                                ? `${appointment.student.firstName} ${appointment.student.lastName}`
+                                : 'ไม่ระบุผู้ใช้'
                           }
                         </span>
                       </div>
@@ -194,13 +250,69 @@ const Dashboard: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        appointment.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                        appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {getStatusText(appointment.status)}
-                      </span>
+                      <div className="flex flex-col items-end space-y-2">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          appointment.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                          appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {getStatusText(appointment.status, appointment)}
+                        </span>
+                        {appointment.status === 'pending' && user?.role === 'advisor' && appointment.studentId && (
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleStatusChange(appointment.id, 'confirm')}
+                              className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-green-700 bg-green-100 hover:bg-green-200"
+                            >
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              ยืนยัน
+                            </button>
+                            <button
+                              onClick={() => handleStatusChange(appointment.id, 'reject')}
+                              className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              ปฏิเสธ
+                            </button>
+                          </div>
+                        )}
+                        {appointment.status === 'pending' && user?.role === 'student' && !appointment.studentId && (
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleStudentAccept(appointment.id)}
+                              className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-green-700 bg-green-100 hover:bg-green-200"
+                            >
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              ยอมรับ
+                            </button>
+                            <button
+                              onClick={() => handleStudentReject(appointment.id)}
+                              className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              ปฏิเสธ
+                            </button>
+                          </div>
+                        )}
+                        {appointment.status === 'confirmed' && user?.role === 'advisor' && (
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleAttendanceConfirmation(appointment.id, 'completed')}
+                              className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-green-700 bg-green-100 hover:bg-green-200"
+                            >
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              มาตามนัด
+                            </button>
+                            <button
+                              onClick={() => handleAttendanceConfirmation(appointment.id, 'failed')}
+                              className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              ไม่มาตามนัด
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -219,8 +331,8 @@ const Dashboard: React.FC = () => {
           <div className="p-6">
             {recentNotifications.length > 0 ? (
               <div className="space-y-4">
-                {recentNotifications.map((notification) => (
-                  <div key={notification.id} className={`p-4 border-l-4 rounded-r-lg ${
+                {recentNotifications.map((notification, index) => (
+                  <div key={`notification-${notification.id}-${notification.createdAt}-${index}`} className={`p-4 border-l-4 rounded-r-lg ${
                     notification.isRead ? 'border-gray-200 bg-gray-50' : 'border-blue-500 bg-blue-50'
                   }`}>
                     <div className="flex items-start">

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Bell, User, Phone, GraduationCap } from 'lucide-react';
+import { User, GraduationCap , Lock } from 'lucide-react';
 
 const Login: React.FC = () => {
-  const [studentId, setStudentId] = useState('');
-  const [phone, setPhone] = useState('');
+  const [user, setUser] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const { login } = useAuth();
@@ -16,11 +16,25 @@ const Login: React.FC = () => {
     setIsLoading(true);
     setError('');
 
+    // Validate inputs
+    if (!user.trim()) {
+      setError('กรุณากรอกเลขประจำตัว/เลขนักศึกษา');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!password.trim()) {
+      setError('กรุณากรอกรหัสผ่าน');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      await login({ studentId, phone });
+      await login({ user, password });
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'เข้าสู่ระบบไม่สำเร็จ');
+      const errorMessage = err.response?.data?.message || 'เข้าสู่ระบบไม่สำเร็จ';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -44,53 +58,77 @@ const Login: React.FC = () => {
 
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm flex items-center">
+                <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
                 {error}
               </div>
             )}
 
             <div className="space-y-4">
               <div>
-                <label htmlFor="studentId" className="block text-sm font-medium text-gray-700 mb-2">
-                  เลขประจำตัว/เลขนักศึกษา
+                <label htmlFor="user" className="block text-sm font-medium text-gray-700 mb-2">
+                  รหัสนักศึกษา/อาจารย์
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <User className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
-                    id="studentId"
-                    name="studentId"
+                    id="user"
+                    name="user"
                     type="text"
                     required
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
+                    value={user}
+                    onChange={(e) => {
+                      setUser(e.target.value);
+                      if (error) setError('');
+                    }}
                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="กรอกเลขประจำตัวหรือเลขนักศึกษา"
+                    placeholder="กรอกรหัสนักศึกษา/อาจารย์"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                  เบอร์โทรศัพท์
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                  รหัสผ่าน
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Phone className="h-5 w-5 text-gray-400" />
+                    <Lock className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
-                    id="phone"
-                    name="phone"
-                    type="tel"
+                    id="password"
+                    name="password"
+                    type="password"
                     required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (error) setError('');
+                    }}
                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="กรอกเบอร์โทรศัพท์"
+                    placeholder="รหัสผ่าน"
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => navigate('/reset-password')}
+                className="text-sm text-blue-600 hover:text-blue-500 font-medium"
+              >
+                ลืมรหัสผ่าน?
+              </button>
+            </div>
+
+            <div className="text-center text-sm text-gray-600 mb-4">
+              <p>รหัสผ่านเริ่มต้นคือรหัสนักศึกษา/อาจารย์</p>
+              <p>หากเปลี่ยนรหัสผ่านแล้ว ให้กรอกรหัสผ่านที่ตั้งใหม่</p>
             </div>
 
             <div>
@@ -111,11 +149,6 @@ const Login: React.FC = () => {
             </div>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-xs text-gray-500">
-              สำหรับอาจารย์ที่ปรึกษา สามารถเข้าสู่ระบบด้วยเบอร์โทรศัพท์เท่านั้น
-            </p>
-          </div>
         </div>
       </div>
     </div>

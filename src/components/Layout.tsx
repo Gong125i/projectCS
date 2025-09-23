@@ -12,7 +12,8 @@ import {
   Menu, 
   X,
   User,
-  GraduationCap
+  GraduationCap,
+  BarChart3
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -32,10 +33,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const navigation = [
-    { name: 'แดชบอร์ด', href: '/dashboard', icon: GraduationCap },
+    ...(user?.role === 'advisor' ? [
+      { name: 'แดชบอร์ด', href: '/dashboard', icon: GraduationCap },
+    ] : []),
     { name: 'นัดหมาย', href: '/appointments', icon: Calendar },
     { name: 'โครงงาน', href: '/projects', icon: FolderOpen },
     ...(user?.role === 'advisor' ? [
+      { name: 'สถิติภาพรวม', href: '/statistics', icon: BarChart3 },
       { name: 'ผู้ใช้', href: '/users', icon: Users },
     ] : []),
     { name: 'โปรไฟล์', href: '/profile', icon: User },

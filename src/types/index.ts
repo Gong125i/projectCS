@@ -6,6 +6,7 @@ export interface User {
   phone: string;
   email?: string; // สำหรับอาจารย์
   office?: string; // สำหรับอาจารย์
+  major?: string; // สาขาวิชา
   role: 'student' | 'advisor';
   createdAt: Date;
   updatedAt: Date;
@@ -27,7 +28,7 @@ export interface Appointment {
   time: string;
   location: string;
   notes?: string;
-  status: 'pending' | 'confirmed' | 'rejected' | 'cancelled' | 'completed';
+  status: 'pending' | 'confirmed' | 'rejected' | 'cancelled' | 'completed' | 'failed';
   studentId: string;
   advisorId: string;
   projectId?: string;
@@ -60,8 +61,8 @@ export interface Notification {
 }
 
 export interface LoginCredentials {
-  studentId?: string;
-  phone: string;
+  user: string;
+  password: string;
 }
 
 export interface AuthResponse {

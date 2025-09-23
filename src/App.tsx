@@ -7,9 +7,13 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Appointments from './pages/Appointments';
 import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
 import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
 import Users from './pages/Users';
+import Statistics from './pages/Statistics';
+import ChangePassword from './pages/ChangePassword';
+import ResetPassword from './pages/ResetPassword';
 import { useAuth } from './contexts/AuthContext';
 import './App.css';
 
@@ -32,12 +36,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+
 // Main App Component
 const AppContent: React.FC = () => {
   return (
     <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route
           path="/dashboard"
           element={
@@ -69,6 +75,16 @@ const AppContent: React.FC = () => {
           }
         />
         <Route
+          path="/projects/:id"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <ProjectDetail />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/profile"
           element={
             <ProtectedRoute>
@@ -95,6 +111,24 @@ const AppContent: React.FC = () => {
               <Layout>
                 <Users />
               </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/statistics"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Statistics />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/change-password"
+          element={
+            <ProtectedRoute>
+              <ChangePassword />
             </ProtectedRoute>
           }
         />
