@@ -1,0 +1,296 @@
+📊 แผนภาพ Class Diagram ระบบนัดหมาย - แบบครบถ้วน 100% (ส่วนที่ 3)
+================================================================
+
+🔧 คลาสอินเทอร์เฟซ (Interface Classes)
+======================================
+
+### 30. LoginCredentials (ข้อมูลเข้าสู่ระบบ)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            LoginCredentials                                    │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + user: string                                                                  │
+│ + password: string                                                              │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายฟิลด์:**
+- `user`: รหัสนักศึกษา/อาจารย์สำหรับเข้าสู่ระบบ
+- `password`: รหัสผ่านสำหรับเข้าสู่ระบบ
+
+### 31. AuthResponse (การตอบสนองการเข้าสู่ระบบ)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              AuthResponse                                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + user: User                                                                    │
+│ + token: string                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายฟิลด์:**
+- `user`: ข้อมูลผู้ใช้ที่เข้าสู่ระบบ
+- `token`: JWT token สำหรับการยืนยันตัวตน
+
+### 32. ApiResponse<T> (การตอบสนอง API)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            ApiResponse<T>                                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + success: boolean                                                              │
+│ + data?: T                                                                      │
+│ + message?: string                                                              │
+│ + error?: string                                                                │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายฟิลด์:**
+- `success`: สถานะความสำเร็จของการเรียก API
+- `data`: ข้อมูลที่ส่งกลับจาก API
+- `message`: ข้อความแจ้งเตือน
+- `error`: ข้อความข้อผิดพลาด
+
+## 🛠️ คลาส Utility (Utility Classes)
+====================================
+
+### 33. MajorUtils (เครื่องมือสาขาวิชา)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              MajorUtils                                        │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + getMajorName(majorCode?: string): string                                      │
+│ + getMajorCode(majorName: string): string                                       │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายเมธอด:**
+- `getMajorName(majorCode)`: แปลงรหัสสาขาวิชาเป็นชื่อภาษาไทย
+- `getMajorCode(majorName)`: แปลงชื่อภาษาไทยเป็นรหัสสาขาวิชา
+
+## ⚙️ ส่วนประกอบหลังบ้าน (Backend Components)
+============================================
+
+### 34. Server (เซิร์ฟเวอร์)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                Server                                          │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + app: Express                                                                  │
+│ + database: Pool                                                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + start(): void                                                                 │
+│ + setupMiddleware(): void                                                       │
+│ + setupRoutes(): void                                                           │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายเมธอด:**
+- `start()`: เริ่มต้นเซิร์ฟเวอร์ Express
+- `setupMiddleware()`: กำหนดค่า middleware (CORS, auth, etc.)
+- `setupRoutes()`: กำหนดค่าเส้นทาง API ทั้งหมด
+
+### 35. AuthController (ตัวควบคุมการยืนยันตัวตน)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            AuthController                                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + login(req: Request, res: Response): void                                      │
+│ + getCurrentUser(req: Request, res: Response): void                             │
+│ + changePassword(req: Request, res: Response): void                             │
+│ + resetPassword(req: Request, res: Response): void                              │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายเมธอด:**
+- `login(req, res)`: จัดการการยืนยันตัวตนผู้ใช้
+- `getCurrentUser(req, res)`: ส่งคืนข้อมูลผู้ใช้ปัจจุบัน
+- `changePassword(req, res)`: จัดการการเปลี่ยนรหัสผ่าน
+- `resetPassword(req, res)`: จัดการการรีเซ็ตรหัสผ่าน
+
+### 36. UserController (ตัวควบคุมผู้ใช้)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            UserController                                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + getUsers(req: Request, res: Response): void                                   │
+│ + getUser(req: Request, res: Response): void                                    │
+│ + updateUser(req: Request, res: Response): void                                 │
+│ + deleteUser(req: Request, res: Response): void                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายเมธอด:**
+- `getUsers(req, res)`: ดึงรายการผู้ใช้ทั้งหมด
+- `getUser(req, res)`: ดึงข้อมูลผู้ใช้ตาม ID
+- `updateUser(req, res)`: อัปเดตข้อมูลผู้ใช้
+- `deleteUser(req, res)`: ลบผู้ใช้ตาม ID
+
+### 37. ProjectController (ตัวควบคุมโปรเจค)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            ProjectController                                   │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + getProjects(req: Request, res: Response): void                                │
+│ + getProject(req: Request, res: Response): void                                 │
+│ + createProject(req: Request, res: Response): void                              │
+│ + updateProject(req: Request, res: Response): void                              │
+│ + deleteProject(req: Request, res: Response): void                              │
+│ + addStudent(req: Request, res: Response): void                                 │
+│ + removeStudent(req: Request, res: Response): void                              │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายเมธอด:**
+- `getProjects(req, res)`: ดึงรายการโปรเจคของผู้ใช้
+- `getProject(req, res)`: ดึงข้อมูลโปรเจคตาม ID
+- `createProject(req, res)`: สร้างโปรเจคใหม่
+- `updateProject(req, res)`: อัปเดตข้อมูลโปรเจค
+- `deleteProject(req, res)`: ลบโปรเจคตาม ID
+- `addStudent(req, res)`: เพิ่มนักศึกษาในโปรเจค
+- `removeStudent(req, res)`: ลบนักศึกษาออกจากโปรเจค
+
+### 38. AppointmentController (ตัวควบคุมการนัดหมาย)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          AppointmentController                                 │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + getAppointments(req: Request, res: Response): void                            │
+│ + getAppointment(req: Request, res: Response): void                             │
+│ + createAppointment(req: Request, res: Response): void                          │
+│ + updateAppointment(req: Request, res: Response): void                          │
+│ + deleteAppointment(req: Request, res: Response): void                          │
+│ + confirmAppointment(req: Request, res: Response): void                         │
+│ + rejectAppointment(req: Request, res: Response): void                          │
+│ + completeAppointment(req: Request, res: Response): void                        │
+│ + getProjectAppointments(req: Request, res: Response): void                     │
+│ + studentAcceptAppointment(req: Request, res: Response): void                   │
+│ + studentRejectAppointment(req: Request, res: Response): void                   │
+│ + updateAppointmentStatus(req: Request, res: Response): void                    │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายเมธอด:**
+- `getAppointments(req, res)`: ดึงรายการการนัดหมายของผู้ใช้
+- `getAppointment(req, res)`: ดึงข้อมูลการนัดหมายตาม ID
+- `createAppointment(req, res)`: สร้างการนัดหมายใหม่
+- `updateAppointment(req, res)`: อัปเดตข้อมูลการนัดหมาย
+- `deleteAppointment(req, res)`: ลบการนัดหมายตาม ID
+- `confirmAppointment(req, res)`: ยืนยันการนัดหมาย
+- `rejectAppointment(req, res)`: ปฏิเสธการนัดหมาย
+- `completeAppointment(req, res)`: ทำเครื่องหมายว่าการนัดหมายเสร็จสิ้น
+- `getProjectAppointments(req, res)`: ดึงการนัดหมายของโปรเจค
+- `studentAcceptAppointment(req, res)`: นักศึกษายอมรับการนัดหมาย
+- `studentRejectAppointment(req, res)`: นักศึกษาปฏิเสธการนัดหมาย
+- `updateAppointmentStatus(req, res)`: อัปเดตสถานะการนัดหมาย
+
+### 39. CommentController (ตัวควบคุมความคิดเห็น)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            CommentController                                   │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + addComment(req: Request, res: Response): void                                 │
+│ + getComments(req: Request, res: Response): void                                │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายเมธอด:**
+- `addComment(req, res)`: เพิ่มความคิดเห็นในการนัดหมาย
+- `getComments(req, res)`: ดึงรายการความคิดเห็นของการนัดหมาย
+
+### 40. NotificationController (ตัวควบคุมการแจ้งเตือน)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          NotificationController                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + getNotifications(req: Request, res: Response): void                           │
+│ + markAsRead(req: Request, res: Response): void                                 │
+│ + markAllAsRead(req: Request, res: Response): void                              │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายเมธอด:**
+- `getNotifications(req, res)`: ดึงรายการการแจ้งเตือนของผู้ใช้
+- `markAsRead(req, res)`: ทำเครื่องหมายการแจ้งเตือนว่าอ่านแล้ว
+- `markAllAsRead(req, res)`: ทำเครื่องหมายการแจ้งเตือนทั้งหมดว่าอ่านแล้ว
+
+### 41. ImportController (ตัวควบคุมการนำเข้าข้อมูล)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            ImportController                                    │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + importUsers(req: Request, res: Response): void                                │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายเมธอด:**
+- `importUsers(req, res)`: นำเข้าข้อมูลผู้ใช้จากไฟล์ CSV
+
+### 42. AuthMiddleware (middleware การยืนยันตัวตน)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            AuthMiddleware                                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + authenticate(req: Request, res: Response, next: NextFunction): void           │
+│ + requireRole(role: string): (req: Request, res: Response, next: NextFunction)  │
+│   => void                                                                       │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายเมธอด:**
+- `authenticate(req, res, next)`: ตรวจสอบ JWT token และยืนยันตัวตน
+- `requireRole(role)`: ตรวจสอบบทบาทผู้ใช้ก่อนเข้าถึง API
+
+### 43. Database (การจัดการฐานข้อมูล)
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              Database                                          │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + pool: Pool                                                                    │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + connect(): Promise<Client>                                                    │
+│ + query(text: string, params?: any[]): Promise<QueryResult>                     │
+│ + end(): Promise<void>                                                          │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+**คำอธิบายเมธอด:**
+- `connect()`: เชื่อมต่อฐานข้อมูล PostgreSQL
+- `query(text, params)`: สร้างคำสั่ง SQL และดึงข้อมูล
+- `end()`: ปิดการเชื่อมต่อฐานข้อมูล
+
+## 🔄 ความสัมพันธ์ (Relationships)
+==================================
+
+### 📋 ความสัมพันธ์หลัก
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              ความสัมพันธ์                                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  User ──1:N──> Project (อาจารย์ที่ปรึกษา)                                      │
+│  User ──N:M──> Project (นักศึกษา)                                              │
+│  User ──1:N──> Appointment (นักศึกษา)                                          │
+│  User ──1:N──> Appointment (อาจารย์)                                           │
+│  User ──1:N──> Notification                                                    │
+│  User ──1:N──> Comment                                                         │
+│                                                                                 │
+│  Project ──1:N──> Appointment                                                  │
+│  Project ──N:M──> User (นักศึกษา)                                              │
+│                                                                                 │
+│  Appointment ──1:N──> Comment                                                  │
+│  Appointment ──1:N──> Notification                                             │
+│                                                                                 │
+│  AuthContext ──uses──> AuthAPI                                                 │
+│  NotificationContext ──uses──> NotificationAPI                                 │
+│  App ──contains──> AuthProvider                                                 │
+│  App ──contains──> NotificationProvider                                         │
+│  ProtectedRoute ──uses──> AuthContext                                           │
+│  MajorUtils ──used by──> User                                                  │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+## 🎨 รูปแบบการออกแบบ (Design Patterns)
+======================================
+
+### 🏗️ รูปแบบที่ใช้
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            รูปแบบการออกแบบ                                     │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐             │
+│  │   Context       │    │   Repository    │    │      MVC        │             │
+│  │   Pattern       │    │   Pattern       │    │    Pattern      │             │
+│  ├─────────────────┤    ├─────────────────┤    ├─────────────────┤             │
+│  │ • AuthContext   │    │ • API Services  │    │ • Controllers   │             │
+│  │ • การจัดการ     │    │ • การเข้าถึง    │    │ • Models        │             │
+│  │   สถานะทั่วโลก  │    │   ข้อมูล        │    │ • Views (React) │             │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘             │
+│                                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐                                    │
+│  │   Middleware    │    │   Service       │                                    │
+│  │   Pattern       │    │   Layer         │                                    │
+│  ├─────────────────┤    ├─────────────────┤                                    │
+│  │ • AuthMiddleware│    │ • ตรรกะธุรกิจ   │                                    │
+│  │ • CORS          │    │ • ชั้น API      │                                    │
+│  │ • การจัดการ     │    │ • การตรวจสอบ    │                                    │
+│  │   ข้อผิดพลาด    │    │   ความถูกต้อง   │                                    │
+│  └─────────────────┘    └─────────────────┘                                    │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+**หมายเหตุ: นี่เป็นส่วนที่ 3 ของแผนภาพ Class Diagram ที่ครบถ้วน 100%**

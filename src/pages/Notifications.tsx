@@ -66,17 +66,7 @@ const Notifications: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="bg-white shadow rounded-lg">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">การแจ้งเตือน</h1>
-            <button
-              onClick={markAllAsRead}
-              className="text-sm text-blue-600 hover:text-blue-800"
-            >
-              ทำเครื่องหมายว่าอ่านแล้วทั้งหมด
-            </button>
-          </div>
-        </div>
+        
 
         <div className="divide-y divide-gray-200">
           {notifications.map((notification, index) => (

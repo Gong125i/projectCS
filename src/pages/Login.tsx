@@ -126,10 +126,6 @@ const Login: React.FC = () => {
               </button>
             </div>
 
-            <div className="text-center text-sm text-gray-600 mb-4">
-              <p>รหัสผ่านเริ่มต้นคือรหัสนักศึกษา/อาจารย์</p>
-              <p>หากเปลี่ยนรหัสผ่านแล้ว ให้กรอกรหัสผ่านที่ตั้งใหม่</p>
-            </div>
 
             <div>
               <button

@@ -1,4 +1,5 @@
-student_id,first_name,last_name,phone,email,role,password
-0001,อาจารย์,ทดสอบ1,0912345678,admin1@test.com,advisor,0001
-0002,อาจารย์,ทดสอบ2,0956789012,admin2@test.com,advisor,0002
-0003,อาจารย์,ทดสอบ3,0956789012,admin3@test.com,advisor,0003
+firstName,lastName,studentId,phone,email,role,password,major
+อาจารย์,2,0002,0912345678,admin2@test.com,advisor,0002,cs
+อาจารย์,3,0003,0912345678,admin3@test.com,advisor,0003,cs
+
+

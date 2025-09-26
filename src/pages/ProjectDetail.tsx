@@ -170,34 +170,34 @@ const ProjectDetail: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-6 text-white shadow-lg">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => navigate('/projects')}
-            className="p-2 text-white hover:text-indigo-200 transition-colors"
-          >
-            <ArrowLeft className="h-6 w-6" />
-          </button>
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold text-white mb-2">{project.name}</h1>
-            <p className="text-indigo-100 text-lg">รายละเอียดโปรเจค</p>
-          </div>
-          <div className="hidden md:flex items-center space-x-4">
-            <div className="text-right">
-              <p className="text-sm text-indigo-200">จำนวนนัดหมาย</p>
-              <p className="text-2xl font-bold text-white">{stats.totalAppointments}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-indigo-200">อัตราความสำเร็จ</p>
-              <p className="text-2xl font-bold text-white">{stats.successRate}%</p>
-            </div>
-          </div>
-        </div>
+      <div className="bg-gray-100 p-6 shadow-md border border-gray-300">
+  <div className="flex items-center space-x-4">
+    <button
+      onClick={() => navigate('/projects')}
+      className="p-2 text-gray-700 hover:text-indigo-600 transition-colors"
+    >
+      <ArrowLeft className="h-6 w-6" />
+    </button>
+    <div className="flex-1">
+      <h1 className="text-lg font-semibold text-gray-900 flex">{project.name}</h1>
+      <p className="text-sm text-gray-700 flex">รายละเอียดโปรเจค</p>
+    </div>
+    <div className="hidden md:flex items-center space-x-6">
+      <div className="text-right">
+        <p className="text-sm text-gray-600">จำนวนนัดหมาย</p>
+        <p className="text-2xl font-bold text-gray-900">{stats.totalAppointments}</p>
       </div>
+      <div className="text-right">
+        <p className="text-sm text-gray-600">อัตราความสำเร็จ</p>
+        <p className="text-2xl font-bold text-gray-900">{stats.successRate}%</p>
+      </div>
+    </div>
+  </div>
+</div>
 
       {/* Project Info */}
       <div className="bg-white rounded-lg shadow-lg border border-indigo-100">
-        <div className="px-6 py-4 border-b border-indigo-200 bg-gradient-to-r from-indigo-50 to-purple-50">
+        <div className="px-6 py-4 border-b border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
           <h2 className="text-lg font-medium text-gray-900 flex items-center">
             <Users className="h-5 w-5 text-indigo-500 mr-2" />
             ข้อมูลโปรเจค

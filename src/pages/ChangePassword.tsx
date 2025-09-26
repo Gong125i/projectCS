@@ -253,11 +253,6 @@ const ChangePassword: React.FC = () => {
           </form>
 
           {/* Help Text */}
-          <div className="mt-6 text-center">
-            <p className="text-xs text-gray-500">
-              รหัสผ่านเริ่มต้นคือรหัสนักศึกษา/อาจารย์ หากยังไม่ได้เปลี่ยนรหัสผ่าน ให้กรอกรหัสนักศึกษา/อาจารย์ในช่องรหัสผ่านปัจจุบัน
-            </p>
-          </div>
         </div>
       </div>
     </div>
