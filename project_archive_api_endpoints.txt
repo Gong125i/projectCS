@@ -1,0 +1,582 @@
+# 🌐 API Endpoints - ระบบจัดเก็บโปรเจคที่สำเร็จแล้ว
+
+## 📋 ภาพรวม API Endpoints
+API Endpoints สำหรับระบบจัดเก็บโปรเจคที่สำเร็จแล้ว พร้อมระบบค้นหาชื่อโปรเจคและปีการศึกษา
+
+---
+
+## 🔐 Authentication Endpoints
+
+### **POST /api/auth/login**
+```typescript
+// Login user
+interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+interface LoginResponse {
+  user: User;
+  token: string;
+}
+
+// Example
+POST /api/auth/login
+{
+  "email": "somsak@example.com",
+  "password": "password123"
+}
+
+// Response
+{
+  "user": {
+    "id": 1,
+    "student_id": "0001",
+    "first_name": "สมศักดิ์",
+    "last_name": "เรียนดี",
+    "email": "somsak@example.com",
+    "role": "student",
+    "major": "Computer Science",
+    "year": 4
+  },
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+### **GET /api/auth/me**
+```typescript
+// Get current user
+GET /api/auth/me
+Authorization: Bearer <token>
+
+// Response
+{
+  "id": 1,
+  "student_id": "0001",
+  "first_name": "สมศักดิ์",
+  "last_name": "เรียนดี",
+  "email": "somsak@example.com",
+  "role": "student",
+  "major": "Computer Science",
+  "year": 4
+}
+```
+
+---
+
+## 📁 Project Archive Endpoints
+
+### **POST /api/project-archive/archive**
+```typescript
+// Archive completed project
+interface ArchiveProjectRequest {
+  projectId: number;
+  finalGrade: string;
+  projectType: string;
+  technologyUsed: string[];
+  keywords: string[];
+}
+
+interface ArchiveProjectResponse {
+  id: number;
+  project_id: number;
+  project_name: string;
+  description: string;
+  advisor_name: string;
+  student_names: string[];
+  academic_year: string;
+  semester: string;
+  completion_date: string;
+  final_grade: string;
+  project_type: string;
+  technology_used: string[];
+  keywords: string[];
+  archived_at: string;
+}
+
+// Example
+POST /api/project-archive/archive
+Authorization: Bearer <token>
+{
+  "projectId": 1,
+  "finalGrade": "A",
+  "projectType": "Web Application",
+  "technologyUsed": ["React", "Node.js", "PostgreSQL"],
+  "keywords": ["การนัดหมาย", "ระบบจัดการ"]
+}
+
+// Response
+{
+  "id": 1,
+  "project_id": 1,
+  "project_name": "ระบบจัดการการนัดหมาย",
+  "description": "ระบบจัดการการนัดหมายระหว่างอาจารย์ที่ปรึกษาและนักศึกษา",
+  "advisor_name": "สมชาย ใจดี",
+  "student_names": ["สมศักดิ์ เรียนดี", "สมพร เก่งมาก"],
+  "academic_year": "2567",
+  "semester": "1",
+  "completion_date": "2024-03-15",
+  "final_grade": "A",
+  "project_type": "Web Application",
+  "technology_used": ["React", "Node.js", "PostgreSQL"],
+  "keywords": ["การนัดหมาย", "ระบบจัดการ"],
+  "archived_at": "2024-03-15T10:30:00Z"
+}
+```
+
+### **GET /api/project-archive**
+```typescript
+// Get all archived projects
+GET /api/project-archive?page=1&limit=10&sort=completion_date&order=desc
+Authorization: Bearer <token>
+
+// Response
+{
+  "data": [
+    {
+      "id": 1,
+      "project_name": "ระบบจัดการการนัดหมาย",
+      "advisor_name": "สมชาย ใจดี",
+      "student_names": ["สมศักดิ์ เรียนดี", "สมพร เก่งมาก"],
+      "academic_year": "2567",
+      "semester": "1",
+      "final_grade": "A",
+      "technology_used": ["React", "Node.js", "PostgreSQL"]
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "total_pages": 5,
+    "total_items": 50,
+    "items_per_page": 10
+  }
+}
+```
+
+### **GET /api/project-archive/:id**
+```typescript
+// Get specific archived project
+GET /api/project-archive/1
+Authorization: Bearer <token>
+
+// Response
+{
+  "id": 1,
+  "project_id": 1,
+  "project_name": "ระบบจัดการการนัดหมาย",
+  "description": "ระบบจัดการการนัดหมายระหว่างอาจารย์ที่ปรึกษาและนักศึกษา",
+  "advisor_name": "สมชาย ใจดี",
+  "student_names": ["สมศักดิ์ เรียนดี", "สมพร เก่งมาก"],
+  "academic_year": "2567",
+  "semester": "1",
+  "completion_date": "2024-03-15",
+  "final_grade": "A",
+  "project_type": "Web Application",
+  "technology_used": ["React", "Node.js", "PostgreSQL"],
+  "keywords": ["การนัดหมาย", "ระบบจัดการ"],
+  "archived_at": "2024-03-15T10:30:00Z"
+}
+```
+
+---
+
+## 🔍 Search Endpoints
+
+### **GET /api/project-archive/search**
+```typescript
+// Search archived projects
+interface SearchRequest {
+  query?: string;
+  academic_year?: string;
+  semester?: string;
+  advisor_name?: string;
+  technology?: string;
+  keywords?: string[];
+  grade_range?: string;
+  project_type?: string;
+  page?: number;
+  limit?: number;
+  sort?: string;
+  order?: 'asc' | 'desc';
+}
+
+interface SearchResponse {
+  data: ProjectArchive[];
+  pagination: PaginationInfo;
+  filters: SearchRequest;
+}
+
+// Example
+GET /api/project-archive/search?query=ระบบจัดการ&academic_year=2567&semester=1&page=1&limit=10
+Authorization: Bearer <token>
+
+// Response
+{
+  "data": [
+    {
+      "id": 1,
+      "project_name": "ระบบจัดการการนัดหมาย",
+      "advisor_name": "สมชาย ใจดี",
+      "student_names": ["สมศักดิ์ เรียนดี", "สมพร เก่งมาก"],
+      "academic_year": "2567",
+      "semester": "1",
+      "final_grade": "A",
+      "technology_used": ["React", "Node.js", "PostgreSQL"]
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "total_pages": 1,
+    "total_items": 1,
+    "items_per_page": 10
+  },
+  "filters": {
+    "query": "ระบบจัดการ",
+    "academic_year": "2567",
+    "semester": "1"
+  }
+}
+```
+
+### **GET /api/project-archive/search/suggestions**
+```typescript
+// Get search suggestions
+GET /api/project-archive/search/suggestions?q=ระบบ
+Authorization: Bearer <token>
+
+// Response
+{
+  "suggestions": [
+    "ระบบจัดการการนัดหมาย",
+    "ระบบจัดการคลังสินค้า",
+    "ระบบจองห้องประชุม"
+  ]
+}
+```
+
+### **GET /api/project-archive/search/history**
+```typescript
+// Get search history
+GET /api/project-archive/search/history
+Authorization: Bearer <token>
+
+// Response
+{
+  "history": [
+    {
+      "id": 1,
+      "search_query": "ระบบจัดการ",
+      "search_filters": {
+        "academic_year": "2567",
+        "semester": "1"
+      },
+      "results_count": 5,
+      "searched_at": "2024-03-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## 📊 Statistics Endpoints
+
+### **GET /api/project-archive/statistics**
+```typescript
+// Get project statistics
+GET /api/project-archive/statistics
+Authorization: Bearer <token>
+
+// Response
+{
+  "total_projects": 150,
+  "projects_by_year": {
+    "2567": 45,
+    "2566": 38,
+    "2565": 32,
+    "2564": 35
+  },
+  "projects_by_semester": {
+    "1": 78,
+    "2": 72
+  },
+  "projects_by_advisor": {
+    "สมชาย ใจดี": 25,
+    "สมหญิง สอนดี": 20,
+    "สมศักดิ์ เก่งมาก": 18
+  },
+  "projects_by_technology": {
+    "React": 45,
+    "Node.js": 38,
+    "Vue.js": 32,
+    "Laravel": 28,
+    "PostgreSQL": 42,
+    "MySQL": 35
+  },
+  "average_grade": 3.2,
+  "completion_rate": 85.5,
+  "top_keywords": [
+    "ระบบจัดการ",
+    "เว็บแอปพลิเคชัน",
+    "การนัดหมาย",
+    "คลังสินค้า"
+  ]
+}
+```
+
+### **GET /api/project-archive/statistics/yearly**
+```typescript
+// Get yearly statistics
+GET /api/project-archive/statistics/yearly?year=2567
+Authorization: Bearer <token>
+
+// Response
+{
+  "year": "2567",
+  "total_projects": 45,
+  "projects_by_semester": {
+    "1": 23,
+    "2": 22
+  },
+  "projects_by_advisor": {
+    "สมชาย ใจดี": 12,
+    "สมหญิง สอนดี": 10,
+    "สมศักดิ์ เก่งมาก": 8
+  },
+  "projects_by_technology": {
+    "React": 18,
+    "Node.js": 15,
+    "Vue.js": 12
+  },
+  "average_grade": 3.4,
+  "completion_rate": 88.9
+}
+```
+
+### **GET /api/project-archive/statistics/technology**
+```typescript
+// Get technology statistics
+GET /api/project-archive/statistics/technology
+Authorization: Bearer <token>
+
+// Response
+{
+  "technology_stats": [
+    {
+      "technology": "React",
+      "usage_count": 45,
+      "percentage": 30.0,
+      "average_grade": 3.3
+    },
+    {
+      "technology": "Node.js",
+      "usage_count": 38,
+      "percentage": 25.3,
+      "average_grade": 3.2
+    },
+    {
+      "technology": "Vue.js",
+      "usage_count": 32,
+      "percentage": 21.3,
+      "average_grade": 3.1
+    }
+  ]
+}
+```
+
+---
+
+## 📄 Export Endpoints
+
+### **GET /api/project-archive/export/csv**
+```typescript
+// Export projects to CSV
+GET /api/project-archive/export/csv?filters={"academic_year":"2567","semester":"1"}
+Authorization: Bearer <token>
+
+// Response
+Content-Type: text/csv
+Content-Disposition: attachment; filename="project_archive_2567_1.csv"
+
+id,project_name,advisor_name,student_names,academic_year,semester,final_grade,technology_used
+1,"ระบบจัดการการนัดหมาย","สมชาย ใจดี","สมศักดิ์ เรียนดี, สมพร เก่งมาก",2567,1,A,"React, Node.js, PostgreSQL"
+2,"ระบบจัดการคลังสินค้า","สมหญิง สอนดี","สมศักดิ์ เรียนดี",2567,1,B+,"Vue.js, Laravel, MySQL"
+```
+
+### **GET /api/project-archive/export/pdf**
+```typescript
+// Export projects to PDF
+GET /api/project-archive/export/pdf?filters={"academic_year":"2567","semester":"1"}
+Authorization: Bearer <token>
+
+// Response
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="project_archive_2567_1.pdf"
+
+[PDF Binary Data]
+```
+
+### **GET /api/project-archive/export/excel**
+```typescript
+// Export projects to Excel
+GET /api/project-archive/export/excel?filters={"academic_year":"2567","semester":"1"}
+Authorization: Bearer <token>
+
+// Response
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+Content-Disposition: attachment; filename="project_archive_2567_1.xlsx"
+
+[Excel Binary Data]
+```
+
+---
+
+## 🎯 Project Management Endpoints
+
+### **GET /api/projects**
+```typescript
+// Get all projects
+GET /api/projects?status=active&page=1&limit=10
+Authorization: Bearer <token>
+
+// Response
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "ระบบจัดการการนัดหมาย",
+      "description": "ระบบจัดการการนัดหมายระหว่างอาจารย์ที่ปรึกษาและนักศึกษา",
+      "advisor_id": 3,
+      "advisor": {
+        "id": 3,
+        "first_name": "สมชาย",
+        "last_name": "ใจดี"
+      },
+      "students": [
+        {
+          "id": 1,
+          "first_name": "สมศักดิ์",
+          "last_name": "เรียนดี"
+        }
+      ],
+      "status": "active",
+      "academic_year": "2567",
+      "semester": "1"
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "total_pages": 5,
+    "total_items": 50,
+    "items_per_page": 10
+  }
+}
+```
+
+### **POST /api/projects/:id/complete**
+```typescript
+// Mark project as completed
+POST /api/projects/1/complete
+Authorization: Bearer <token>
+{
+  "finalGrade": "A",
+  "projectType": "Web Application",
+  "technologyUsed": ["React", "Node.js", "PostgreSQL"],
+  "keywords": ["การนัดหมาย", "ระบบจัดการ"]
+}
+
+// Response
+{
+  "message": "Project completed and archived successfully",
+  "project": {
+    "id": 1,
+    "name": "ระบบจัดการการนัดหมาย",
+    "status": "completed"
+  },
+  "archive": {
+    "id": 1,
+    "project_id": 1,
+    "project_name": "ระบบจัดการการนัดหมาย",
+    "final_grade": "A"
+  }
+}
+```
+
+---
+
+## 📋 Error Responses
+
+### **400 Bad Request**
+```typescript
+{
+  "error": "Bad Request",
+  "message": "Invalid request parameters",
+  "details": {
+    "field": "academic_year",
+    "message": "Academic year must be in format YYYY"
+  }
+}
+```
+
+### **401 Unauthorized**
+```typescript
+{
+  "error": "Unauthorized",
+  "message": "Invalid or expired token"
+}
+```
+
+### **403 Forbidden**
+```typescript
+{
+  "error": "Forbidden",
+  "message": "Insufficient permissions to access this resource"
+}
+```
+
+### **404 Not Found**
+```typescript
+{
+  "error": "Not Found",
+  "message": "Project archive not found"
+}
+```
+
+### **500 Internal Server Error**
+```typescript
+{
+  "error": "Internal Server Error",
+  "message": "An unexpected error occurred"
+}
+```
+
+---
+
+## 📋 สรุป API Endpoints
+
+### **✅ Authentication:**
+- `POST /api/auth/login` - เข้าสู่ระบบ
+- `GET /api/auth/me` - ข้อมูลผู้ใช้ปัจจุบัน
+
+### **📁 Project Archive:**
+- `POST /api/project-archive/archive` - จัดเก็บโปรเจคที่สำเร็จแล้ว
+- `GET /api/project-archive` - ดูโปรเจคที่จัดเก็บแล้ว
+- `GET /api/project-archive/:id` - ดูโปรเจคเฉพาะ
+
+### **🔍 Search:**
+- `GET /api/project-archive/search` - ค้นหาโปรเจค
+- `GET /api/project-archive/search/suggestions` - คำแนะนำการค้นหา
+- `GET /api/project-archive/search/history` - ประวัติการค้นหา
+
+### **📊 Statistics:**
+- `GET /api/project-archive/statistics` - สถิติโปรเจค
+- `GET /api/project-archive/statistics/yearly` - สถิติตามปี
+- `GET /api/project-archive/statistics/technology` - สถิติตามเทคโนโลยี
+
+### **📄 Export:**
+- `GET /api/project-archive/export/csv` - ส่งออกเป็น CSV
+- `GET /api/project-archive/export/pdf` - ส่งออกเป็น PDF
+- `GET /api/project-archive/export/excel` - ส่งออกเป็น Excel
+
+**API Endpoints นี้จะรองรับระบบจัดเก็บโปรเจคที่สำเร็จแล้วได้อย่างครบถ้วนครับ!** 🎯
+

@@ -13,7 +13,8 @@ import {
   X,
   User,
   GraduationCap,
-  BarChart3
+  BarChart3,
+  Archive
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -62,22 +63,38 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <X className="h-6 w-6" />
             </button>
           </div>
-          <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigation.map((item) => (
+          <nav className="flex-1 space-y-1 px-2 py-4 flex flex-col">
+            <div className="flex-1 space-y-1">
+              {navigation.map((item) => (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                    isActive(item.href)
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  <item.icon className="mr-3 h-5 w-5" />
+                  {item.name}
+                </Link>
+              ))}
+            </div>
+            <div className="border-t border-gray-200 pt-2">
               <Link
-                key={item.name}
-                to={item.href}
+                to="/archived-projects"
                 onClick={() => setSidebarOpen(false)}
                 className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
-                  isActive(item.href)
+                  isActive('/archived-projects')
                     ? 'bg-blue-100 text-blue-700'
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
               >
-                <item.icon className="mr-3 h-5 w-5" />
-                {item.name}
+                <Archive className="mr-3 h-5 w-5" />
+                โครงงานที่จัดเก็บ
               </Link>
-            ))}
+            </div>
           </nav>
         </div>
       </div>
@@ -88,21 +105,36 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="flex h-16 items-center px-4">
             <h1 className="text-xl font-semibold text-gray-900">ระบบนัดหมาย</h1>
           </div>
-          <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigation.map((item) => (
+          <nav className="flex-1 space-y-1 px-2 py-4 flex flex-col">
+            <div className="flex-1 space-y-1">
+              {navigation.map((item) => (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                    isActive(item.href)
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  <item.icon className="mr-3 h-5 w-5" />
+                  {item.name}
+                </Link>
+              ))}
+            </div>
+            <div className="border-t border-gray-200 pt-2 mt-2">
               <Link
-                key={item.name}
-                to={item.href}
+                to="/archived-projects"
                 className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
-                  isActive(item.href)
+                  isActive('/archived-projects')
                     ? 'bg-blue-100 text-blue-700'
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
               >
-                <item.icon className="mr-3 h-5 w-5" />
-                {item.name}
+                <Archive className="mr-3 h-5 w-5" />
+                โครงงานที่จัดเก็บ
               </Link>
-            ))}
+            </div>
           </nav>
         </div>
       </div>

@@ -1,0 +1,340 @@
+# 🚀 ตัวอย่างการใช้งานระบบจัดเก็บโปรเจคที่สำเร็จแล้ว
+
+## 📋 ภาพรวมการใช้งาน
+ระบบจัดเก็บโปรเจคที่สำเร็จแล้ว พร้อมระบบค้นหาชื่อโปรเจคและปีการศึกษา
+
+---
+
+## 🔧 1. การจัดเก็บโปรเจคที่สำเร็จแล้ว
+
+### **1.1 เมื่อโปรเจคสำเร็จแล้ว:**
+```typescript
+// ตัวอย่างการจัดเก็บโปรเจคที่สำเร็จแล้ว
+async function archiveCompletedProject(projectId: number) {
+  try {
+    // 1. ตรวจสอบว่าโปรเจคสำเร็จแล้วหรือไม่
+    const project = await Project.getProject(projectId);
+    if (project.status !== 'completed') {
+      throw new Error('โปรเจคยังไม่สำเร็จ');
+    }
+
+    // 2. จัดเก็บโปรเจคในคลัง
+    const archive = await ProjectArchive.archiveProject(projectId);
+    
+    // 3. อัปเดตสถานะโปรเจค
+    await Project.updateProject(projectId, { status: 'archived' });
+    
+    console.log('✅ จัดเก็บโปรเจคเรียบร้อย:', archive.project_name);
+    return archive;
+  } catch (error) {
+    console.error('❌ เกิดข้อผิดพลาด:', error.message);
+  }
+}
+```
+
+### **1.2 ข้อมูลที่จัดเก็บ:**
+```typescript
+// ข้อมูลที่จัดเก็บใน ProjectArchive
+const archiveData = {
+  project_id: 123,
+  project_name: "ระบบจัดการการนัดหมาย",
+  description: "ระบบจัดการการนัดหมายระหว่างอาจารย์ที่ปรึกษาและนักศึกษา",
+  advisor_name: "อาจารย์สมชาย ใจดี",
+  student_names: ["นายสมศักดิ์ เรียนดี", "นางสาวสมพร เก่งมาก"],
+  academic_year: "2567",
+  semester: "1",
+  completion_date: "2024-03-15",
+  final_grade: "A",
+  project_type: "Web Application",
+  technology_used: ["React", "Node.js", "PostgreSQL"],
+  keywords: ["การนัดหมาย", "ระบบจัดการ", "เว็บแอปพลิเคชัน"]
+};
+```
+
+---
+
+## 🔍 2. ระบบค้นหาโปรเจค
+
+### **2.1 ค้นหาตามชื่อโปรเจค:**
+```typescript
+// ค้นหาตามชื่อโปรเจค
+async function searchProjectsByName(projectName: string) {
+  try {
+    const results = await ProjectSearch.searchByName(projectName);
+    
+    console.log(`🔍 พบโปรเจค ${results.length} รายการ:`);
+    results.forEach((project, index) => {
+      console.log(`${index + 1}. ${project.project_name}`);
+      console.log(`   อาจารย์ที่ปรึกษา: ${project.advisor_name}`);
+      console.log(`   ปีการศึกษา: ${project.academic_year}/${project.semester}`);
+      console.log(`   เกรด: ${project.final_grade}`);
+      console.log('');
+    });
+    
+    return results;
+  } catch (error) {
+    console.error('❌ เกิดข้อผิดพลาด:', error.message);
+  }
+}
+
+// ตัวอย่างการใช้งาน
+searchProjectsByName("ระบบจัดการ");
+```
+
+### **2.2 ค้นหาตามปีการศึกษา:**
+```typescript
+// ค้นหาตามปีการศึกษา
+async function searchProjectsByYear(year: string) {
+  try {
+    const results = await ProjectSearch.searchByYear(year);
+    
+    console.log(`📅 พบโปรเจคในปีการศึกษา ${year} จำนวน ${results.length} รายการ:`);
+    results.forEach((project, index) => {
+      console.log(`${index + 1}. ${project.project_name}`);
+      console.log(`   ภาคเรียน: ${project.semester}`);
+      console.log(`   เกรด: ${project.final_grade}`);
+      console.log('');
+    });
+    
+    return results;
+  } catch (error) {
+    console.error('❌ เกิดข้อผิดพลาด:', error.message);
+  }
+}
+
+// ตัวอย่างการใช้งาน
+searchProjectsByYear("2567");
+```
+
+### **2.3 ค้นหาแบบขั้นสูง:**
+```typescript
+// ค้นหาแบบขั้นสูง
+async function advancedProjectSearch() {
+  try {
+    // สร้างตัวกรอง
+    const filters = new SearchFilters();
+    filters.setFilter("academic_year", "2567");
+    filters.setFilter("semester", "1");
+    filters.setFilter("technology", ["React", "Node.js"]);
+    filters.setFilter("grade_range", "A-B");
+    
+    // ค้นหา
+    const results = await ProjectSearch.advancedSearch(filters);
+    
+    console.log(`🔍 พบโปรเจคตามเงื่อนไข จำนวน ${results.length} รายการ:`);
+    results.forEach((project, index) => {
+      console.log(`${index + 1}. ${project.project_name}`);
+      console.log(`   อาจารย์ที่ปรึกษา: ${project.advisor_name}`);
+      console.log(`   เทคโนโลยี: ${project.technology_used.join(", ")}`);
+      console.log(`   เกรด: ${project.final_grade}`);
+      console.log('');
+    });
+    
+    return results;
+  } catch (error) {
+    console.error('❌ เกิดข้อผิดพลาด:', error.message);
+  }
+}
+```
+
+---
+
+## 📊 3. ระบบสถิติและรายงาน
+
+### **3.1 สถิติโปรเจคตามปีการศึกษา:**
+```typescript
+// สถิติโปรเจคตามปีการศึกษา
+async function getYearlyProjectStats() {
+  try {
+    const stats = await ProjectStats.calculateStats();
+    
+    console.log('📊 สถิติโปรเจคตามปีการศึกษา:');
+    Object.entries(stats.projects_by_year).forEach(([year, count]) => {
+      console.log(`   ${year}: ${count} โปรเจค`);
+    });
+    
+    console.log(`\n📈 สถิติรวม:`);
+    console.log(`   รวมโปรเจคทั้งหมด: ${stats.total_projects} โปรเจค`);
+    console.log(`   เกรดเฉลี่ย: ${stats.average_grade}`);
+    console.log(`   อัตราการสำเร็จ: ${stats.completion_rate}%`);
+    
+    return stats;
+  } catch (error) {
+    console.error('❌ เกิดข้อผิดพลาด:', error.message);
+  }
+}
+```
+
+### **3.2 สถิติโปรเจคตามเทคโนโลยี:**
+```typescript
+// สถิติโปรเจคตามเทคโนโลยี
+async function getTechnologyStats() {
+  try {
+    const stats = await ProjectStats.calculateStats();
+    
+    console.log('💻 สถิติโปรเจคตามเทคโนโลยี:');
+    Object.entries(stats.projects_by_technology).forEach(([tech, count]) => {
+      console.log(`   ${tech}: ${count} โปรเจค`);
+    });
+    
+    return stats.projects_by_technology;
+  } catch (error) {
+    console.error('❌ เกิดข้อผิดพลาด:', error.message);
+  }
+}
+```
+
+---
+
+## 📄 4. ระบบส่งออกข้อมูล
+
+### **4.1 ส่งออกเป็น CSV:**
+```typescript
+// ส่งออกข้อมูลเป็น CSV
+async function exportProjectsToCSV() {
+  try {
+    const csvData = await ProjectArchive.exportProjectsToCSV();
+    
+    // บันทึกไฟล์
+    const fs = require('fs');
+    fs.writeFileSync('project_archive.csv', csvData);
+    
+    console.log('✅ ส่งออกข้อมูลเป็น CSV เรียบร้อย');
+    console.log('📁 ไฟล์: project_archive.csv');
+    
+    return csvData;
+  } catch (error) {
+    console.error('❌ เกิดข้อผิดพลาด:', error.message);
+  }
+}
+```
+
+### **4.2 ส่งออกเป็น PDF:**
+```typescript
+// ส่งออกข้อมูลเป็น PDF
+async function exportProjectsToPDF() {
+  try {
+    const pdfBuffer = await ProjectArchive.exportProjectsToPDF();
+    
+    // บันทึกไฟล์
+    const fs = require('fs');
+    fs.writeFileSync('project_archive.pdf', pdfBuffer);
+    
+    console.log('✅ ส่งออกข้อมูลเป็น PDF เรียบร้อย');
+    console.log('📁 ไฟล์: project_archive.pdf');
+    
+    return pdfBuffer;
+  } catch (error) {
+    console.error('❌ เกิดข้อผิดพลาด:', error.message);
+  }
+}
+```
+
+---
+
+## 🎯 5. ตัวอย่างการใช้งานจริง
+
+### **5.1 หน้าค้นหาโปรเจค:**
+```typescript
+// หน้าค้นหาโปรเจค
+class ProjectSearchPage {
+  private searchQuery: string = '';
+  private filters: SearchFilters = new SearchFilters();
+  private results: ProjectArchive[] = [];
+  
+  // ค้นหาโปรเจค
+  async searchProjects() {
+    try {
+      this.results = await ProjectSearch.searchProjects(this.searchQuery, this.filters);
+      this.displayResults();
+    } catch (error) {
+      console.error('❌ เกิดข้อผิดพลาด:', error.message);
+    }
+  }
+  
+  // แสดงผลลัพธ์
+  displayResults() {
+    console.log(`🔍 พบโปรเจค ${this.results.length} รายการ:`);
+    this.results.forEach((project, index) => {
+      console.log(`${index + 1}. ${project.project_name}`);
+      console.log(`   อาจารย์ที่ปรึกษา: ${project.advisor_name}`);
+      console.log(`   ปีการศึกษา: ${project.academic_year}/${project.semester}`);
+      console.log(`   เกรด: ${project.final_grade}`);
+      console.log(`   เทคโนโลยี: ${project.technology_used.join(", ")}`);
+      console.log('');
+    });
+  }
+  
+  // ตั้งค่าตัวกรอง
+  setFilter(key: string, value: any) {
+    this.filters.setFilter(key, value);
+  }
+  
+  // ล้างตัวกรอง
+  clearFilters() {
+    this.filters.clearAllFilters();
+  }
+}
+```
+
+### **5.2 หน้าสถิติโปรเจค:**
+```typescript
+// หน้าสถิติโปรเจค
+class ProjectStatsPage {
+  private stats: ProjectStats | null = null;
+  
+  // โหลดสถิติ
+  async loadStats() {
+    try {
+      this.stats = await ProjectStats.calculateStats();
+      this.displayStats();
+    } catch (error) {
+      console.error('❌ เกิดข้อผิดพลาด:', error.message);
+    }
+  }
+  
+  // แสดงสถิติ
+  displayStats() {
+    if (!this.stats) return;
+    
+    console.log('📊 สถิติโปรเจคที่สำเร็จแล้ว:');
+    console.log(`   รวมโปรเจคทั้งหมด: ${this.stats.total_projects} โปรเจค`);
+    console.log(`   เกรดเฉลี่ย: ${this.stats.average_grade}`);
+    console.log(`   อัตราการสำเร็จ: ${this.stats.completion_rate}%`);
+    
+    console.log('\n📅 สถิติตามปีการศึกษา:');
+    Object.entries(this.stats.projects_by_year).forEach(([year, count]) => {
+      console.log(`   ${year}: ${count} โปรเจค`);
+    });
+    
+    console.log('\n💻 สถิติตามเทคโนโลยี:');
+    Object.entries(this.stats.projects_by_technology).forEach(([tech, count]) => {
+      console.log(`   ${tech}: ${count} โปรเจค`);
+    });
+  }
+}
+```
+
+---
+
+## 📋 สรุปการใช้งาน
+
+### **✅ ฟีเจอร์หลัก:**
+1. **จัดเก็บโปรเจคที่สำเร็จแล้ว** - เก็บข้อมูลโปรเจคที่สำเร็จแล้ว
+2. **ค้นหาโปรเจค** - ค้นหาตามชื่อ, ปีการศึกษา, ภาคเรียน
+3. **สถิติโปรเจค** - สถิติตามปีการศึกษา, เทคโนโลยี, เกรด
+4. **ส่งออกข้อมูล** - ส่งออกเป็น CSV, PDF
+
+### **🔍 ระบบค้นหา:**
+- ค้นหาตามชื่อโปรเจค
+- ค้นหาตามปีการศึกษา
+- ค้นหาแบบขั้นสูง
+- ตัวกรองการค้นหา
+
+### **📊 ระบบรายงาน:**
+- สถิติโปรเจค
+- การส่งออกข้อมูล
+- รายงานการสำเร็จโปรเจค
+
+**ระบบนี้จะช่วยให้สามารถจัดเก็บและค้นหาโปรเจคที่สำเร็จแล้วได้อย่างมีประสิทธิภาพครับ!** 🎯
+

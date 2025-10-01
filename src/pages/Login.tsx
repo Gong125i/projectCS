@@ -30,8 +30,13 @@ const Login: React.FC = () => {
     }
 
     try {
-      await login({ user, password });
-      navigate('/dashboard');
+      const userData = await login({ user, password });
+      // นักศึกษาไปหน้า Appointments, อาจารย์ไปหน้า Dashboard
+      if (userData?.role === 'student') {
+        navigate('/appointments');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'เข้าสู่ระบบไม่สำเร็จ';
       setError(errorMessage);

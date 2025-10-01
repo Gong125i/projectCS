@@ -10,12 +10,15 @@ import {
   UserPlus, 
   UserMinus,
   FolderOpen,
-  Eye
+  Eye,
+  Search,
+  Filter
 } from 'lucide-react';
 
 const Projects: React.FC = () => {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -23,13 +26,20 @@ const Projects: React.FC = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [formData, setFormData] = useState({
-    name: ''
+    name: '',
+    academicYear: ''
   });
   const [inviteStudentId, setInviteStudentId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
 
   useEffect(() => {
     fetchData();
   }, [user]);
+
+  useEffect(() => {
+    filterProjects();
+  }, [searchTerm, selectedYear, projects]);
 
   const fetchData = async () => {
     try {
@@ -44,6 +54,7 @@ const Projects: React.FC = () => {
       
       const results = await Promise.all(promises);
       setProjects(results[0]);
+      setFilteredProjects(results[0]);
       
       // Set users only if user is advisor
       if (user?.role === 'advisor') {
@@ -58,12 +69,48 @@ const Projects: React.FC = () => {
     }
   };
 
+  const filterProjects = () => {
+    let filtered = projects;
+
+    // Filter by search term (ชื่อโปรเจค และ ชื่อนักศึกษา)
+    if (searchTerm) {
+      filtered = filtered.filter(project => {
+        // ค้นหาจากชื่อโปรเจค
+        const matchProjectName = project.name.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        // ค้นหาจากชื่อนักศึกษา
+        const matchStudentName = project.students?.some(student => {
+          const fullName = `${student.firstName} ${student.lastName}`.toLowerCase();
+          return fullName.includes(searchTerm.toLowerCase());
+        });
+        
+        return matchProjectName || matchStudentName;
+      });
+    }
+
+    // Filter by academic year
+    if (selectedYear) {
+      filtered = filtered.filter(project => 
+        project.academicYear === selectedYear
+      );
+    }
+
+    setFilteredProjects(filtered);
+  };
+
+  // Get unique academic years for filter
+  const academicYears = Array.from(new Set(
+    projects
+      .map(p => p.academicYear)
+      .filter(year => year)
+  )).sort((a, b) => b.localeCompare(a)); // Sort descending
+
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await projectAPI.createProject(formData);
       setShowCreateModal(false);
-      setFormData({ name: '' });
+      setFormData({ name: '', academicYear: '' });
       fetchData();
     } catch (error) {
       console.error('Failed to create project:', error);
@@ -78,7 +125,7 @@ const Projects: React.FC = () => {
       await projectAPI.updateProject(selectedProject.id, formData);
       setShowEditModal(false);
       setSelectedProject(null);
-      setFormData({ name: '' });
+      setFormData({ name: '', academicYear: '' });
       fetchData();
     } catch (error) {
       console.error('Failed to update project:', error);
@@ -151,9 +198,57 @@ const Projects: React.FC = () => {
         )}
       </div>
 
+      {/* Search and Filter Bar */}
+      <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200">
+        <div className="flex flex-col md:flex-row gap-3">
+          {/* Search by name */}
+          <div className="flex-1 flex items-center space-x-2">
+            <Search className="h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="ค้นหาชื่อโครงงาน หรือ ชื่อนักศึกษา..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="text-gray-500 hover:text-gray-700 text-sm"
+              >
+                ล้าง
+              </button>
+            )}
+          </div>
+
+          {/* Filter by academic year */}
+          <div className="flex items-center space-x-2 md:w-64">
+            <Filter className="h-5 w-5 text-gray-400" />
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">ทุกปีการศึกษา</option>
+              {academicYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+            {selectedYear && (
+              <button
+                onClick={() => setSelectedYear('')}
+                className="text-gray-500 hover:text-gray-700 text-sm"
+              >
+                ล้าง
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Projects List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {projects.map((project, index) => (
+        {filteredProjects.map((project, index) => (
           <div key={`project-${project.id}-${index}`} className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center">
@@ -165,7 +260,10 @@ const Projects: React.FC = () => {
                   <button
                     onClick={() => {
                       setSelectedProject(project);
-                      setFormData({ name: project.name });
+                      setFormData({ 
+                        name: project.name,
+                        academicYear: project.academicYear || ''
+                      });
                       setShowEditModal(true);
                     }}
                     className="text-blue-600 hover:text-blue-800"
@@ -188,6 +286,11 @@ const Projects: React.FC = () => {
               <p className="text-sm text-gray-600 mb-2">
                 <strong>อาจารย์ที่ปรึกษา:</strong> {project.advisor.firstName} {project.advisor.lastName}
               </p>
+              {project.academicYear && (
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>ปีการศึกษา:</strong> {project.academicYear}
+                </p>
+              )}
               {user?.role === 'advisor' ? (
                 <p className="text-sm text-gray-600">
                   <strong>นักศึกษา:</strong> {project.students.length} คน
@@ -295,6 +398,16 @@ const Projects: React.FC = () => {
                     placeholder="กรอกชื่อโครงงาน"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">ปีการศึกษา</label>
+                  <input
+                    type="text"
+                    value={formData.academicYear}
+                    onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="เช่น 2567"
+                  />
+                </div>
                 <div className="flex justify-end space-x-3">
                   <button
                     type="button"
@@ -332,6 +445,16 @@ const Projects: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     placeholder="กรอกชื่อโครงงาน"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">ปีการศึกษา</label>
+                  <input
+                    type="text"
+                    value={formData.academicYear}
+                    onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="เช่น 2567"
                   />
                 </div>
                 <div className="flex justify-end space-x-3">

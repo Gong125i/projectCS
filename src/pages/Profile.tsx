@@ -221,6 +221,16 @@ const Profile: React.FC = () => {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  อีเมล
+                </label>
+                <div className="flex items-center">
+                  <Mail className="h-5 w-5 text-gray-400 mr-2" />
+                  <p className="text-sm text-gray-900">{user.email}</p>
+                </div>
+              </div>
+
               {user.major && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">

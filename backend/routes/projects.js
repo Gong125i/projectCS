@@ -4,13 +4,13 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get all projects (filtered by user role)
-router.get('/', authenticateToken, async (req, res) => {
+// Get archived projects (filtered by user role)
+router.get('/archived', authenticateToken, async (req, res) => {
   try {
     let query, params;
 
     if (req.user.role === 'advisor') {
-      // Advisors see all projects they created
+      // Advisors see all archived projects they created
       query = `
         SELECT p.*, 
                u.id as advisor_id, u.first_name as advisor_first_name, u.last_name as advisor_last_name,
@@ -18,12 +18,12 @@ router.get('/', authenticateToken, async (req, res) => {
                u.office as advisor_office, u.role as advisor_role
         FROM projects p
         JOIN users u ON p.advisor_id = u.id
-        WHERE p.advisor_id = $1
-        ORDER BY p.created_at DESC
+        WHERE p.advisor_id = $1 AND p.archived = TRUE
+        ORDER BY p.archived_at DESC
       `;
       params = [req.user.id];
     } else {
-      // Students see projects they're part of
+      // Students see archived projects they're part of
       query = `
         SELECT p.*, 
                u.id as advisor_id, u.first_name as advisor_first_name, u.last_name as advisor_last_name,
@@ -32,7 +32,98 @@ router.get('/', authenticateToken, async (req, res) => {
         FROM projects p
         JOIN users u ON p.advisor_id = u.id
         JOIN project_students ps ON p.id = ps.project_id
-        WHERE ps.student_id = $1
+        WHERE ps.student_id = $1 AND p.archived = TRUE
+        ORDER BY p.archived_at DESC
+      `;
+      params = [req.user.id];
+    }
+
+    const result = await pool.query(query, params);
+
+    // Get students for each project
+    const projects = await Promise.all(
+      result.rows.map(async (row) => {
+        const studentsResult = await pool.query(
+          `SELECT u.id, u.student_id, u.first_name, u.last_name, u.phone, u.email, u.office, u.role
+           FROM project_students ps
+           JOIN users u ON ps.student_id = u.id
+           WHERE ps.project_id = $1`,
+          [row.id]
+        );
+
+        return {
+          id: row.id,
+          name: row.name,
+          advisor: {
+            id: row.advisor_id,
+            studentId: row.advisor_student_id,
+            firstName: row.advisor_first_name,
+            lastName: row.advisor_last_name,
+            phone: row.advisor_phone,
+            email: row.advisor_email,
+            office: row.advisor_office,
+            role: row.advisor_role
+          },
+          students: studentsResult.rows.map(s => ({
+            id: s.id,
+            studentId: s.student_id,
+            firstName: s.first_name,
+            lastName: s.last_name,
+            phone: s.phone,
+            email: s.email,
+            office: s.office,
+            role: s.role
+          })),
+          archived: row.archived,
+          archivedAt: row.archived_at,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: projects
+    });
+  } catch (error) {
+    console.error('Error fetching archived projects:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch archived projects'
+    });
+  }
+});
+
+// Get all projects (filtered by user role)
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    let query, params;
+
+    if (req.user.role === 'advisor') {
+      // Advisors see all projects they created (excluding archived)
+      query = `
+        SELECT p.*, 
+               u.id as advisor_id, u.first_name as advisor_first_name, u.last_name as advisor_last_name,
+               u.student_id as advisor_student_id, u.phone as advisor_phone, u.email as advisor_email, 
+               u.office as advisor_office, u.role as advisor_role
+        FROM projects p
+        JOIN users u ON p.advisor_id = u.id
+        WHERE p.advisor_id = $1 AND (p.archived IS NULL OR p.archived = FALSE)
+        ORDER BY p.created_at DESC
+      `;
+      params = [req.user.id];
+    } else {
+      // Students see projects they're part of (excluding archived)
+      query = `
+        SELECT p.*, 
+               u.id as advisor_id, u.first_name as advisor_first_name, u.last_name as advisor_last_name,
+               u.student_id as advisor_student_id, u.phone as advisor_phone, u.email as advisor_email, 
+               u.office as advisor_office, u.role as advisor_role
+        FROM projects p
+        JOIN users u ON p.advisor_id = u.id
+        JOIN project_students ps ON p.id = ps.project_id
+        WHERE ps.student_id = $1 AND (p.archived IS NULL OR p.archived = FALSE)
         ORDER BY p.created_at DESC
       `;
       params = [req.user.id];
@@ -66,6 +157,8 @@ router.get('/', authenticateToken, async (req, res) => {
           id: row.id,
           name: row.name,
           advisorId: row.advisor_id,
+          academicYear: row.academic_year,
+          semester: row.semester,
           advisor: {
             id: row.advisor_id,
             studentId: row.advisor_student_id,
@@ -77,6 +170,8 @@ router.get('/', authenticateToken, async (req, res) => {
             role: row.advisor_role
           },
           students,
+          archived: row.archived,
+          archivedAt: row.archived_at,
           createdAt: row.created_at,
           updatedAt: row.updated_at
         };
@@ -196,7 +291,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Create project
 router.post('/', authenticateToken, requireRole(['advisor']), async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, academicYear, semester } = req.body;
 
     if (!name) {
       return res.status(400).json({
@@ -206,8 +301,8 @@ router.post('/', authenticateToken, requireRole(['advisor']), async (req, res) =
     }
 
     const result = await pool.query(
-      'INSERT INTO projects (name, advisor_id) VALUES ($1, $2) RETURNING *',
-      [name, req.user.id]
+      'INSERT INTO projects (name, advisor_id, academic_year, semester) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, req.user.id, academicYear || null, semester || null]
     );
 
     const project = result.rows[0];
@@ -218,6 +313,8 @@ router.post('/', authenticateToken, requireRole(['advisor']), async (req, res) =
         id: project.id,
         name: project.name,
         advisorId: project.advisor_id,
+        academicYear: project.academic_year,
+        semester: project.semester,
         createdAt: project.created_at,
         updatedAt: project.updated_at
       }
@@ -235,7 +332,7 @@ router.post('/', authenticateToken, requireRole(['advisor']), async (req, res) =
 router.put('/:id', authenticateToken, requireRole(['advisor']), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, academicYear, semester } = req.body;
 
     if (!name) {
       return res.status(400).json({
@@ -258,8 +355,8 @@ router.put('/:id', authenticateToken, requireRole(['advisor']), async (req, res)
     }
 
     const result = await pool.query(
-      'UPDATE projects SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      [name, id]
+      'UPDATE projects SET name = $1, academic_year = $2, semester = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *',
+      [name, academicYear || null, semester || null, id]
     );
 
     const project = result.rows[0];
@@ -269,6 +366,8 @@ router.put('/:id', authenticateToken, requireRole(['advisor']), async (req, res)
       data: {
         id: project.id,
         name: project.name,
+        academicYear: project.academic_year,
+        semester: project.semester,
         advisorId: project.advisor_id,
         createdAt: project.created_at,
         updatedAt: project.updated_at

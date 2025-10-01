@@ -3,13 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { projectAPI, appointmentAPI } from '../services/api';
 import type { Project, Appointment } from '../types/index.js';
-import { 
+import {
   ArrowLeft,
-  Calendar, 
-  Clock, 
-  MapPin, 
-  Users, 
-  User,
+  Calendar,
+  Clock,
+  MapPin,
+  Users,
   CheckCircle,
   XCircle,
   AlertCircle,
@@ -20,8 +19,7 @@ import {
   Save,
   X as XIcon,
   BarChart3,
-  TrendingUp,
-  Target
+  Archive
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -35,6 +33,16 @@ const ProjectDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [editingNotes, setEditingNotes] = useState<string | null>(null);
   const [notesText, setNotesText] = useState('');
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [archiveData, setArchiveData] = useState({
+    finalGrade: '',
+    projectType: '',
+    technologyUsed: '',
+    keywords: ''
+  });
+  const [archiving, setArchiving] = useState(false);
+  const [sortBy, setSortBy] = useState<'status' | 'date'>('status');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
 
   useEffect(() => {
     if (id) {
@@ -44,7 +52,7 @@ const ProjectDetail: React.FC = () => {
 
   const fetchData = async () => {
     if (!id) return;
-    
+
     try {
       const [projectData, appointmentsData] = await Promise.all([
         projectAPI.getProject(id),
@@ -59,40 +67,26 @@ const ProjectDetail: React.FC = () => {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
-      case 'rejected':
-        return <XCircle className="h-5 w-5 text-red-500" />;
-      case 'pending':
-        return <AlertCircle className="h-5 w-5 text-yellow-500" />;
-      case 'completed':
-        return <Check className="h-5 w-5 text-green-600" />;
-      case 'failed':
-        return <X className="h-5 w-5 text-red-600" />;
-      default:
-        return <Clock className="h-5 w-5 text-gray-500" />;
-    }
-  };
+  const getStatusBadge = (status: string) => {
+    const badges: { [key: string]: { bg: string; text: string; label: string } } = {
+      pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'รอยืนยัน' },
+      confirmed: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'ยืนยันแล้ว' },
+      completed: { bg: 'bg-green-100', text: 'text-green-800', label: 'เสร็จสิ้น' },
+      failed: { bg: 'bg-red-100', text: 'text-red-800', label: 'ไม่มาตามนัด' },
+      rejected: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'ปฏิเสธ' },
+      cancelled: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'ยกเลิก' },
+      pending_student_confirmation: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'รอนักศึกษายืนยัน' },
+      pending_advisor_confirmation: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'รออาจารย์ยืนยัน' },
+      no_response: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'ไม่ตอบรับ' }
+    };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'ยืนยันแล้ว';
-      case 'rejected':
-        return 'ปฏิเสธ';
-      case 'pending':
-        return 'รอการยืนยัน';
-      case 'cancelled':
-        return 'ยกเลิก';
-      case 'completed':
-        return 'เสร็จสิ้น';
-      case 'failed':
-        return 'ไม่มาตามนัด';
-      default:
-        return status;
-    }
+    const badge = badges[status] || { bg: 'bg-gray-100', text: 'text-gray-800', label: status };
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
+        {badge.label}
+      </span>
+    );
   };
 
   const handleEditNotes = (appointmentId: string, currentNotes: string) => {
@@ -102,13 +96,12 @@ const ProjectDetail: React.FC = () => {
 
   const handleSaveNotes = async (appointmentId: string) => {
     try {
-      console.log('Updating notes for appointment:', appointmentId, 'with notes:', notesText);
       await appointmentAPI.updateAppointment(appointmentId, { notes: notesText });
       setEditingNotes(null);
-      setNotesText('');
-      fetchData(); // Refresh data
+      fetchData();
     } catch (error) {
-      console.error('Failed to update notes:', error);
+      console.error('Failed to save notes:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึกหมายเหตุ');
     }
   };
 
@@ -117,7 +110,71 @@ const ProjectDetail: React.FC = () => {
     setNotesText('');
   };
 
-  // Calculate appointment statistics
+  const handleArchiveProject = async () => {
+    if (!project) {
+      alert('ไม่พบข้อมูลโปรเจค');
+      return;
+    }
+
+    setArchiving(true);
+    try {
+      const stats = calculateStats();
+      const archivePayload = {
+        projectId: project.id,
+        projectName: project.name,
+        advisorName: `${project.advisor.firstName} ${project.advisor.lastName}`,
+        studentNames: project.students.map(student => `${student.firstName} ${student.lastName}`),
+        totalAppointments: stats.totalAppointments,
+        completedAppointments: stats.completedAppointments,
+        successRate: stats.successRate,
+        attendanceRate: stats.attendanceRate,
+        appointmentDetails: appointments.map(apt => ({
+          id: apt.id,
+          title: apt.title,
+          date: apt.date,
+          time: apt.time,
+          location: apt.location,
+          status: apt.status,
+          notes: apt.notes
+        })),
+        finalGrade: archiveData.finalGrade || 'A',
+        projectType: archiveData.projectType || 'Web Application',
+        technologyUsed: archiveData.technologyUsed ? archiveData.technologyUsed.split(',').map(tech => tech.trim()) : ['React', 'Node.js', 'PostgreSQL'],
+        keywords: archiveData.keywords ? archiveData.keywords.split(',').map(keyword => keyword.trim()) : ['การนัดหมาย', 'ระบบจัดการ']
+      };
+
+      const response = await fetch('http://localhost:3001/api/project-archive/archive', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(archivePayload)
+      });
+
+      if (response.ok) {
+        await response.json();
+        alert('จัดเก็บโปรเจคเรียบร้อยแล้ว!');
+        setShowArchiveModal(false);
+        setArchiveData({
+          finalGrade: '',
+          projectType: '',
+          technologyUsed: '',
+          keywords: ''
+        });
+        fetchData();
+      } else {
+        const error = await response.json();
+        alert(`เกิดข้อผิดพลาด: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error archiving project:', error);
+      alert('เกิดข้อผิดพลาดในการจัดเก็บโปรเจค');
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   const calculateStats = () => {
     const totalAppointments = appointments.length;
     const completedAppointments = appointments.filter(apt => apt.status === 'completed').length;
@@ -125,10 +182,10 @@ const ProjectDetail: React.FC = () => {
     const confirmedAppointments = appointments.filter(apt => apt.status === 'confirmed').length;
     const failedAppointments = appointments.filter(apt => apt.status === 'failed').length;
     const rejectedAppointments = appointments.filter(apt => apt.status === 'rejected').length;
-    
+
     const successRate = totalAppointments > 0 ? ((completedAppointments / totalAppointments) * 100).toFixed(1) : '0.0';
-    const attendanceRate = (completedAppointments + failedAppointments) > 0 
-      ? ((completedAppointments / (completedAppointments + failedAppointments)) * 100).toFixed(1) 
+    const attendanceRate = (completedAppointments + failedAppointments) > 0
+      ? ((completedAppointments / (completedAppointments + failedAppointments)) * 100).toFixed(1)
       : '0.0';
 
     return {
@@ -170,433 +227,392 @@ const ProjectDetail: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gray-100 p-6 shadow-md border border-gray-300">
-  <div className="flex items-center space-x-4">
-    <button
-      onClick={() => navigate('/projects')}
-      className="p-2 text-gray-700 hover:text-indigo-600 transition-colors"
-    >
-      <ArrowLeft className="h-6 w-6" />
-    </button>
-    <div className="flex-1">
-      <h1 className="text-lg font-semibold text-gray-900 flex">{project.name}</h1>
-      <p className="text-sm text-gray-700 flex">รายละเอียดโปรเจค</p>
-    </div>
-    <div className="hidden md:flex items-center space-x-6">
-      <div className="text-right">
-        <p className="text-sm text-gray-600">จำนวนนัดหมาย</p>
-        <p className="text-2xl font-bold text-gray-900">{stats.totalAppointments}</p>
-      </div>
-      <div className="text-right">
-        <p className="text-sm text-gray-600">อัตราความสำเร็จ</p>
-        <p className="text-2xl font-bold text-gray-900">{stats.successRate}%</p>
-      </div>
-    </div>
-  </div>
-</div>
-
-      {/* Project Info */}
-      <div className="bg-white rounded-lg shadow-lg border border-indigo-100">
-        <div className="px-6 py-4 border-b border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-          <h2 className="text-lg font-medium text-gray-900 flex items-center">
-            <Users className="h-5 w-5 text-indigo-500 mr-2" />
-            ข้อมูลโปรเจค
-          </h2>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Advisor Info */}
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-blue-200 rounded-full flex items-center justify-center mr-4">
-                  <User className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-blue-900">อาจารย์ที่ปรึกษา</h3>
-                  <p className="text-sm text-blue-600">Project Advisor</p>
-                </div>
-              </div>
-              <div className="bg-white rounded-lg p-4 border border-blue-200">
-                <p className="text-lg font-medium text-gray-900">
-                  {project.advisor.firstName} {project.advisor.lastName}
-                </p>
-                {project.advisor.email && (
-                  <p className="text-sm text-gray-600 mt-1">{project.advisor.email}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Students Count */}
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-green-200 rounded-full flex items-center justify-center mr-4">
-                  <Users className="h-6 w-6 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-green-900">จำนวนนักศึกษา</h3>
-                  <p className="text-sm text-green-600">Total Students</p>
-                </div>
-              </div>
-              <div className="bg-white rounded-lg p-4 border border-green-200">
-                <p className="text-3xl font-bold text-green-900">{project.students.length}</p>
-                <p className="text-sm text-gray-600 mt-1">คน</p>
-              </div>
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => navigate('/projects')}
+              className="p-2 text-gray-700 hover:text-indigo-600 transition-colors"
+            >
+              <ArrowLeft className="h-6 w-6" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+              <p className="text-sm text-gray-600">ตารางการนัดหมาย</p>
             </div>
           </div>
+          {user?.role === 'advisor' && (
+            <button
+              onClick={() => setShowArchiveModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+            >
+              <Archive className="h-4 w-4 mr-2" />
+              จัดเก็บโปรเจค
+            </button>
+          )}
+        </div>
+        
+        {/* Mini Statistics */}
+        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+          <div className="flex items-center justify-center bg-blue-50 px-4 py-2 rounded-lg">
+            <div className="text-center">
+              <p className="text-xs text-blue-600">การนัดทั้งหมด</p>
+              <p className="text-xl font-bold text-blue-900">{stats.totalAppointments}</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-center bg-green-50 px-4 py-2 rounded-lg">
+            <div className="text-center">
+              <p className="text-xs text-green-600">เสร็จสิ้นแล้ว</p>
+              <p className="text-xl font-bold text-green-900">{stats.completedAppointments}</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-center bg-purple-50 px-4 py-2 rounded-lg">
+            <div className="text-center">
+              <p className="text-xs text-purple-600">อัตราความสำเร็จ</p>
+              <p className="text-xl font-bold text-purple-900">{stats.successRate}%</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-          {/* Students List */}
-          {project.students.length > 0 && (
-            <div className="mt-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Users className="h-5 w-5 text-gray-500 mr-2" />
-                รายชื่อนักศึกษา
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Project Info */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <Users className="h-5 w-5 text-indigo-500 mr-2" />
+          ข้อมูลโปรเจค
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-3">
+            <div className="flex items-start">
+              <span className="text-sm font-semibold text-gray-700 w-32">ชื่อโปรเจค:</span>
+              <span className="text-sm text-gray-900">{project.name}</span>
+            </div>
+            <div className="flex items-start">
+              <span className="text-sm font-semibold text-gray-700 w-32">อาจารย์ที่ปรึกษา:</span>
+              <span className="text-sm text-gray-900">{project.advisor.firstName} {project.advisor.lastName}</span>
+            </div>
+            <div className="flex items-start">
+              <span className="text-sm font-semibold text-gray-700 w-32">อีเมล:</span>
+              <span className="text-sm text-gray-900">{project.advisor.email}</span>
+            </div>
+            <div className="flex items-start">
+              <span className="text-sm font-semibold text-gray-700 w-32">เบอร์โทร:</span>
+              <span className="text-sm text-gray-900">{project.advisor.phone || '-'}</span>
+            </div>
+            {project.advisor.office && (
+              <div className="flex items-start">
+                <span className="text-sm font-semibold text-gray-700 w-32">ห้องทำงาน:</span>
+                <span className="text-sm text-gray-900">{project.advisor.office}</span>
+              </div>
+            )}
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-start">
+              <span className="text-sm font-semibold text-gray-700 w-32">นักศึกษา:</span>
+              <div className="flex-1">
                 {project.students.map((student, index) => (
-                  <div key={student.id} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 border border-gray-200 hover:shadow-md transition-shadow">
-                    <div className="flex items-center">
-                      <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center mr-3">
-                        <span className="text-sm font-bold text-gray-600">#{index + 1}</span>
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">
-                          {student.firstName} {student.lastName}
-                        </p>
-                        {student.studentId && (
-                          <p className="text-sm text-gray-600">{student.studentId}</p>
-                        )}
-                      </div>
+                  <div key={student.id} className="text-sm text-gray-900 mb-2">
+                    <div className="font-medium">{index + 1}. {student.firstName} {student.lastName}</div>
+                    <div className="text-xs text-gray-500 ml-4">
+                      รหัส: {student.studentId} | {student.email}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Appointment Statistics */}
-      <div className="bg-white rounded-lg shadow-lg border border-blue-100">
-        <div className="px-6 py-4 border-b border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-          <h2 className="text-lg font-medium text-gray-900 flex items-center">
-            <BarChart3 className="h-5 w-5 text-blue-500 mr-2" />
-            สถิติการนัดหมาย
-          </h2>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Total Appointments */}
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-blue-600">นัดหมายทั้งหมด</p>
-                  <p className="text-3xl font-bold text-blue-900">{stats.totalAppointments}</p>
-                </div>
-                <div className="w-12 h-12 bg-blue-200 rounded-full flex items-center justify-center">
-                  <Calendar className="h-6 w-6 text-blue-600" />
-                </div>
+            {project.academicYear && (
+              <div className="flex items-start">
+                <span className="text-sm font-semibold text-gray-700 w-32">ปีการศึกษา:</span>
+                <span className="text-sm text-gray-900">{project.academicYear}</span>
               </div>
-            </div>
-
-            {/* Success Rate */}
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-green-600">อัตราความสำเร็จ</p>
-                  <p className="text-3xl font-bold text-green-900">{stats.successRate}%</p>
-                </div>
-                <div className="w-12 h-12 bg-green-200 rounded-full flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </div>
-
-            {/* Attendance Rate */}
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-purple-600">อัตราการมาตามนัด</p>
-                  <p className="text-3xl font-bold text-purple-900">{stats.attendanceRate}%</p>
-                </div>
-                <div className="w-12 h-12 bg-purple-200 rounded-full flex items-center justify-center">
-                  <Target className="h-6 w-6 text-purple-600" />
-                </div>
-              </div>
-            </div>
-
-            {/* Completed Appointments */}
-            <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-6 border border-emerald-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-emerald-600">นัดหมายที่สำเร็จ</p>
-                  <p className="text-3xl font-bold text-emerald-900">{stats.completedAppointments}</p>
-                </div>
-                <div className="w-12 h-12 bg-emerald-200 rounded-full flex items-center justify-center">
-                  <CheckCircle className="h-6 w-6 text-emerald-600" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Detailed Statistics */}
-          <div className="mt-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">รายละเอียดสถานะ</h3>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                <div className="w-8 h-8 bg-yellow-200 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <AlertCircle className="h-4 w-4 text-yellow-600" />
-                </div>
-                <p className="text-2xl font-bold text-yellow-900">{stats.pendingAppointments}</p>
-                <p className="text-sm text-yellow-600">รอการยืนยัน</p>
-              </div>
-              
-              <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <CheckCircle className="h-4 w-4 text-blue-600" />
-                </div>
-                <p className="text-2xl font-bold text-blue-900">{stats.confirmedAppointments}</p>
-                <p className="text-sm text-blue-600">ยืนยันแล้ว</p>
-              </div>
-              
-              <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
-                <div className="w-8 h-8 bg-green-200 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <Check className="h-4 w-4 text-green-600" />
-                </div>
-                <p className="text-2xl font-bold text-green-900">{stats.completedAppointments}</p>
-                <p className="text-sm text-green-600">เสร็จสิ้น</p>
-              </div>
-              
-              <div className="text-center p-4 bg-red-50 rounded-lg border border-red-200">
-                <div className="w-8 h-8 bg-red-200 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <X className="h-4 w-4 text-red-600" />
-                </div>
-                <p className="text-2xl font-bold text-red-900">{stats.failedAppointments}</p>
-                <p className="text-sm text-red-600">ไม่มาตามนัด</p>
-              </div>
-              
-              <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <XCircle className="h-4 w-4 text-gray-600" />
-                </div>
-                <p className="text-2xl font-bold text-gray-900">{stats.rejectedAppointments}</p>
-                <p className="text-sm text-gray-600">ปฏิเสธ</p>
-              </div>
+            )}
+            <div className="flex items-start">
+              <span className="text-sm font-semibold text-gray-700 w-32">สร้างเมื่อ:</span>
+              <span className="text-sm text-gray-900">{format(new Date(project.createdAt), 'dd MMMM yyyy', { locale: th })}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Completed Appointments */}
-      <div className="bg-white rounded-lg shadow-lg border border-gray-100">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-slate-50">
-          <h2 className="text-lg font-medium text-gray-900 flex items-center">
-            <CheckCircle className="h-5 w-5 text-gray-500 mr-2" />
-            นัดหมายที่สำเร็จแล้ว
-            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-              {appointments.filter(apt => apt.status === 'completed').length} ครั้ง
-            </span>
-          </h2>
+
+      {/* Appointments Table */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+              <Calendar className="h-5 w-5 text-indigo-500 mr-2" />
+              ตารางการนัดหมาย
+              <span className="ml-2 text-sm font-normal text-gray-600">
+                ({filterStatus === 'all' ? `ทั้งหมด ${appointments.length}` : `${appointments.filter(a => a.status === filterStatus).length}`} ครั้ง)
+              </span>
+            </h2>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">แสดง:</span>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">ทั้งหมด</option>
+                  <option value="completed">เสร็จสิ้น</option>
+                  <option value="failed">ไม่มาตามนัด</option>
+                </select>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">เรียงตาม:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'status' | 'date')}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="status">สถานะ</option>
+                  <option value="date">วันที่</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="p-6">
-          {appointments.filter(apt => apt.status === 'completed').length > 0 ? (
-            <div className="space-y-6">
-              {appointments
-                .filter(apt => apt.status === 'completed')
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .map((appointment, index) => {
-                  const totalCompleted = appointments.filter(apt => apt.status === 'completed').length;
-                  const appointmentNumber = totalCompleted - index;
-                  return (
-                <div key={appointment.id} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                          <span className="text-lg font-bold text-gray-600">#{appointmentNumber}</span>
+
+        {appointments.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">
+            <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+            <p>ยังไม่มีการนัดหมาย</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
+                    ลำดับที่
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                    วันที่และเวลา
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                    สถานะ
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">
+                    หัวข้อการนัดหมาย
+                  </th>
+                  {user?.role === 'advisor' && (
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      หมายเหตุ
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {appointments
+                  .filter(appointment => {
+                    if (filterStatus === 'all') return true;
+                    return appointment.status === filterStatus;
+                  })
+                  .sort((a, b) => {
+                    if (sortBy === 'status') {
+                      // Sort by status first (completed -> confirmed -> pending -> others)
+                      const statusOrder: { [key: string]: number } = {
+                        completed: 1,
+                        confirmed: 2,
+                        pending: 3,
+                        pending_student_confirmation: 4,
+                        pending_advisor_confirmation: 5,
+                        rejected: 6,
+                        failed: 7,
+                        cancelled: 8,
+                        no_response: 9
+                      };
+                      const statusDiff = (statusOrder[a.status] || 10) - (statusOrder[b.status] || 10);
+                      if (statusDiff !== 0) return statusDiff;
+                      
+                      // Then sort by date
+                      return new Date(a.date).getTime() - new Date(b.date).getTime();
+                    } else {
+                      // Sort by date only
+                      return new Date(a.date).getTime() - new Date(b.date).getTime();
+                    }
+                  })
+                  .map((appointment, index) => (
+                    <tr key={appointment.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {index + 1}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center text-sm text-gray-900">
+                          <Calendar className="h-4 w-4 mr-2 text-blue-500" />
+                          <div>
+                            <div className="font-medium">
+                              {format(new Date(appointment.date), 'dd MMMM yyyy', { locale: th })}
+                            </div>
+                            <div className="text-xs text-gray-500 flex items-center mt-1">
+                              <Clock className="h-3 w-3 mr-1" />
+                              {appointment.time}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="ml-4 flex-1">
-                        <div className="flex items-center space-x-2 mb-3">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            การนัดหมายครั้งที่ {appointmentNumber}
-                          </h3>
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            เสร็จสิ้น
-                          </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getStatusBadge(appointment.status)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-900">
+                          <div className="font-medium">{appointment.title || '-'}</div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div className="flex items-center text-sm text-gray-600 bg-white rounded-lg p-3">
-                            <Calendar className="h-4 w-4 mr-2 text-blue-500" />
-                            <span className="font-medium">{format(new Date(appointment.date), 'EEEE, d MMMM yyyy', { locale: th })}</span>
-                          </div>
-                          <div className="flex items-center text-sm text-gray-600 bg-white rounded-lg p-3">
-                            <Clock className="h-4 w-4 mr-2 text-purple-500" />
-                            <span className="font-medium">{appointment.time}</span>
-                          </div>
-                          <div className="flex items-center text-sm text-gray-600 bg-white rounded-lg p-3">
-                            <MapPin className="h-4 w-4 mr-2 text-red-500" />
-                            <span className="font-medium">{appointment.location}</span>
-                          </div>
-                        </div>
-                        
-                        {/* Notes Section */}
-                        <div className="mt-6">
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="text-base font-semibold text-gray-800 flex items-center">
-                              <FileText className="h-5 w-5 mr-2 text-blue-500" />
-                              บันทึกการนัดหมาย
-                            </h4>
-                            {user?.role === 'advisor' && (
-                              <button
-                                onClick={() => handleEditNotes(appointment.id, appointment.notes || '')}
-                                className="inline-flex items-center px-3 py-1 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
-                              >
-                                <Edit className="h-4 w-4 mr-1" />
-                                แก้ไข
-                              </button>
-                            )}
-                          </div>
-                          
+                      </td>
+                      {user?.role === 'advisor' && (
+                        <td className="px-6 py-4">
                           {editingNotes === appointment.id ? (
-                            <div className="space-y-3">
+                            <div className="flex items-center space-x-2">
                               <textarea
                                 value={notesText}
                                 onChange={(e) => setNotesText(e.target.value)}
-                                placeholder="เขียนบันทึกการนัดหมาย..."
-                                className="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                                rows={4}
+                                className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                rows={2}
                               />
-                              <div className="flex space-x-3">
-                                <button
-                                  onClick={() => handleSaveNotes(appointment.id)}
-                                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
-                                >
-                                  <Save className="h-4 w-4 mr-2" />
-                                  บันทึก
-                                </button>
-                                <button
-                                  onClick={handleCancelEdit}
-                                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
-                                >
-                                  <XIcon className="h-4 w-4 mr-2" />
-                                  ยกเลิก
-                                </button>
-                              </div>
+                              <button
+                                onClick={() => handleSaveNotes(appointment.id)}
+                                className="p-1 text-green-600 hover:text-green-800"
+                                title="บันทึก"
+                              >
+                                <Save className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={handleCancelEdit}
+                                className="p-1 text-gray-600 hover:text-gray-800"
+                                title="ยกเลิก"
+                              >
+                                <XIcon className="h-4 w-4" />
+                              </button>
                             </div>
                           ) : (
-                            <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
-                              {appointment.notes ? (
-                                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{appointment.notes}</p>
-                              ) : (
-                                <p className="text-sm text-gray-500 italic">ยังไม่มีบันทึกการนัดหมาย</p>
+                            <div className="flex items-center space-x-2">
+                              <div className="flex-1 text-sm text-gray-600">
+                                {appointment.notes || '-'}
+                              </div>
+                              {appointment.status === 'completed' && (
+                                <button
+                                  onClick={() => handleEditNotes(appointment.id, appointment.notes || '')}
+                                  className="p-1 text-blue-600 hover:text-blue-800"
+                                  title="แก้ไข"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
                               )}
                             </div>
                           )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                  );
-                })}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="h-8 w-8 text-gray-500" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">ยังไม่มีการนัดหมายที่สำเร็จแล้ว</h3>
-              <p className="text-gray-500">เมื่อมีการนัดหมายที่เสร็จสิ้น จะแสดงที่นี่</p>
-            </div>
-          )}
-        </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* Other Appointments */}
-      <div className="bg-white rounded-lg shadow-lg border border-gray-100">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-slate-50">
-          <h2 className="text-lg font-medium text-gray-900 flex items-center">
-            <Calendar className="h-5 w-5 text-gray-500 mr-2" />
-            นัดหมายอื่นๆ
-            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-              {appointments.filter(apt => apt.status !== 'completed').length} รายการ
-            </span>
-          </h2>
-        </div>
-        <div className="p-6">
-          {appointments.filter(apt => apt.status !== 'completed').length > 0 ? (
-            <div className="space-y-4">
-              {appointments
-                .filter(apt => apt.status !== 'completed')
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .map((appointment) => (
-                <div key={appointment.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0">
-                        {getStatusIcon(appointment.status)}
-                      </div>
-                      <div className="ml-4 flex-1">
-                        <div className="flex items-center space-x-2 mb-3">
-                          <h3 className="text-base font-semibold text-gray-900">
-                            {appointment.project 
-                              ? `โปรเจค: ${appointment.project.name}`
-                              : user?.role === 'student' 
-                                ? `อาจารย์ที่ปรึกษา: ${appointment.advisor.firstName} ${appointment.advisor.lastName}`
-                                : appointment.student 
-                                  ? `${appointment.student.firstName} ${appointment.student.lastName}`
-                                  : 'ไม่ระบุผู้ใช้'
-                            }
-                          </h3>
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                            appointment.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                            appointment.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                            appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            appointment.status === 'failed' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {getStatusText(appointment.status)}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                          <div className="flex items-center text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
-                            <Calendar className="h-4 w-4 mr-2 text-blue-500" />
-                            <span className="font-medium">{format(new Date(appointment.date), 'EEEE, d MMMM yyyy', { locale: th })}</span>
-                          </div>
-                          <div className="flex items-center text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
-                            <Clock className="h-4 w-4 mr-2 text-purple-500" />
-                            <span className="font-medium">{appointment.time}</span>
-                          </div>
-                          <div className="flex items-center text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
-                            <MapPin className="h-4 w-4 mr-2 text-red-500" />
-                            <span className="font-medium">{appointment.location}</span>
-                          </div>
-                        </div>
-                        {appointment.notes && (
-                          <div className="mt-4 bg-blue-50 rounded-lg p-3 border border-blue-200">
-                            <p className="text-sm text-gray-700">
-                              <strong className="text-blue-800">หมายเหตุ:</strong> {appointment.notes}
-                            </p>
-                          </div>
-                        )}
-                      </div>
+      {/* Archive Modal */}
+      {showArchiveModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                  <Archive className="h-5 w-5 mr-2 text-green-600" />
+                  ยืนยันการจัดเก็บโปรเจค
+                </h3>
+                <button
+                  onClick={() => setShowArchiveModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XIcon className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-gray-700 mb-4">
+                  คุณต้องการจัดเก็บโปรเจค <strong>"{project?.name}"</strong> หรือไม่?
+                </p>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <h4 className="font-semibold text-blue-800 mb-2">ข้อมูลที่จะจัดเก็บ:</h4>
+                  <div className="text-sm text-blue-700 space-y-1">
+                    <p><strong>การนัดหมายทั้งหมด:</strong> {stats.totalAppointments} ครั้ง</p>
+                    <p><strong>การนัดหมายที่เสร็จสิ้น:</strong> {stats.completedAppointments} ครั้ง</p>
+                    <p><strong>อัตราความสำเร็จ:</strong> {stats.successRate}%</p>
+                  </div>
+                </div>
+
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-green-800 mb-2">ข้อมูลเพิ่มเติม (ไม่บังคับ):</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-green-700 mb-1">
+                        เกรดสุดท้าย
+                      </label>
+                      <select
+                        value={archiveData.finalGrade}
+                        onChange={(e) => setArchiveData({ ...archiveData, finalGrade: e.target.value })}
+                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                      >
+                        <option value="">เลือกเกรด</option>
+                        <option value="A">A</option>
+                        <option value="B+">B+</option>
+                        <option value="B">B</option>
+                        <option value="C+">C+</option>
+                        <option value="C">C</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-green-700 mb-1">
+                        ประเภทโปรเจค
+                      </label>
+                      <select
+                        value={archiveData.projectType}
+                        onChange={(e) => setArchiveData({ ...archiveData, projectType: e.target.value })}
+                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                      >
+                        <option value="">เลือกประเภท</option>
+                        <option value="Web Application">Web Application</option>
+                        <option value="Mobile Application">Mobile Application</option>
+                        <option value="Desktop Application">Desktop Application</option>
+                        <option value="Research Project">Research Project</option>
+                      </select>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Calendar className="h-8 w-8 text-gray-500" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">ยังไม่มีการนัดหมายอื่นๆ</h3>
-              <p className="text-gray-500">เมื่อมีการนัดหมายใหม่ จะแสดงที่นี่</p>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleArchiveProject}
+                  disabled={archiving}
+                  className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                >
+                  {archiving ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      กำลังจัดเก็บ...
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="h-4 w-4 mr-2" />
+                      ยืนยันจัดเก็บ
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowArchiveModal(false)}
+                  className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  ยกเลิก
+                </button>
+              </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

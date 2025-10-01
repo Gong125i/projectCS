@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Button</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .test-button {
+            background: #10b981;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        .test-button:hover {
+            background: #059669;
+        }
+        .info {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🔧 ปุ่มทดสอบจัดเก็บโปรเจค</h1>
+        
+        <div class="info">
+            <h3>ข้อมูลการทดสอบ:</h3>
+            <p><strong>Frontend URL:</strong> <a href="http://localhost:5173" target="_blank">http://localhost:5173</a></p>
+            <p><strong>Backend URL:</strong> <a href="http://localhost:3001/api/health" target="_blank">http://localhost:3001/api/health</a></p>
+            <p><strong>Project Detail:</strong> <a href="http://localhost:5173/projects/16" target="_blank">http://localhost:5173/projects/16</a></p>
+        </div>
+
+        <h3>ข้อมูลการเข้าสู่ระบบ:</h3>
+        <div class="info">
+            <p><strong>รหัสผู้ใช้:</strong> ADV001</p>
+            <p><strong>รหัสผ่าน:</strong> ADV001</p>
+            <p><strong>บทบาท:</strong> advisor (อาจารย์ที่ปรึกษา)</p>
+        </div>
+
+        <h3>ขั้นตอนการทดสอบ:</h3>
+        <ol>
+            <li>เข้าสู่ระบบด้วยข้อมูลข้างต้น</li>
+            <li>ไปที่หน้า Project Detail (โปรเจค ID: 16)</li>
+            <li>ดูปุ่ม "จัดเก็บโปรเจค (ทดสอบ)" ที่ด้านบนสุด</li>
+            <li>กดปุ่มเพื่อเปิด Modal กรอกข้อมูล</li>
+            <li>กรอกข้อมูลและกดจัดเก็บ</li>
+        </ol>
+
+        <button class="test-button" onclick="window.open('http://localhost:5173', '_blank')">
+            เปิด Frontend
+        </button>
+        
+        <button class="test-button" onclick="window.open('http://localhost:5173/projects/16', '_blank')">
+            เปิด Project Detail
+        </button>
+
+        <button class="test-button" onclick="window.open('http://localhost:3001/api/health', '_blank')">
+            ตรวจสอบ Backend
+        </button>
+    </div>
+</body>
+</html>
+

@@ -80,6 +80,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
         return {
           id: row.id,
+          title: row.title,
           date: row.date,
           time: row.time,
           location: row.location,
@@ -314,6 +315,7 @@ router.get('/project/:projectId', authenticateToken, async (req, res) => {
 
         return {
           id: row.id,
+          title: row.title,
           date: row.date,
           time: row.time,
           location: row.location,
@@ -369,9 +371,9 @@ router.get('/project/:projectId', authenticateToken, async (req, res) => {
 // Create appointment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { date, time, location, notes, projectId } = req.body;
+    const { title, date, time, location, notes, projectId } = req.body;
 
-    if (!date || !time || !location || !projectId) {
+    if (!title || !date || !time || !location || !projectId) {
       return res.status(400).json({
         success: false,
         message: 'ข้อมูลที่จำเป็นไม่ครบถ้วน'
@@ -407,10 +409,10 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO appointments (date, time, location, notes, student_id, advisor_id, project_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO appointments (title, date, time, location, notes, student_id, advisor_id, project_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [date, time, location, notes, finalStudentId, finalAdvisorId, finalProjectId]
+      [title, date, time, location, notes, finalStudentId, finalAdvisorId, finalProjectId]
     );
 
     const appointment = result.rows[0];
@@ -470,55 +472,126 @@ router.post('/', authenticateToken, async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { date, time, location, notes } = req.body;
+    const { title, date, time, location, notes } = req.body;
     
-    console.log('Update appointment request:', { id, date, time, location, notes, user: req.user.id });
+    console.log('Update appointment request:', { id, title, date, time, location, notes, user: req.user.id });
 
     // Check if user can update this appointment
+    // Allow if user is student, advisor, or student in the project
     const appointmentCheck = await pool.query(
-      'SELECT * FROM appointments WHERE id = $1 AND (student_id = $2 OR advisor_id = $2)',
+      `SELECT a.* FROM appointments a
+       LEFT JOIN project_students ps ON a.project_id = ps.project_id
+       WHERE a.id = $1 
+       AND (a.student_id = $2 OR a.advisor_id = $2 OR ps.student_id = $2)`,
       [id, req.user.id]
     );
 
     if (appointmentCheck.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'ไม่พบนัดหมายนี้'
+        message: 'ไม่พบนัดหมายนี้หรือคุณไม่มีสิทธิ์แก้ไข'
       });
     }
 
     const appointment = appointmentCheck.rows[0];
     
-    // Check if appointment can be updated (not completed, failed, or rejected)
+    // Check if appointment can be updated (not completed, failed, rejected, or no_response)
     // Exception: Allow updating notes for completed appointments
     const isOnlyUpdatingNotes = date === undefined && time === undefined && location === undefined && notes !== undefined;
     
-    if (['completed', 'failed', 'rejected'].includes(appointment.status) && !isOnlyUpdatingNotes) {
+    if (['completed', 'failed', 'rejected', 'no_response'].includes(appointment.status) && !isOnlyUpdatingNotes) {
       return res.status(400).json({
         success: false,
-        message: 'ไม่สามารถแก้ไขนัดหมายที่เสร็จสิ้น ถูกปฏิเสธ หรือไม่มาตามนัดแล้ว'
+        message: 'ไม่สามารถแก้ไขนัดหมายที่เสร็จสิ้น ถูกปฏิเสธ ไม่มาตามนัด หรือไม่ตอบรับแล้ว'
       });
     }
 
+    // Check if advisor or student is editing the appointment
+    let newStatus = appointment.status;
+    if (req.user.role === 'advisor' && 
+        (date || time || location) && appointment.status === 'confirmed') {
+      // Advisor edited confirmed appointment - need student confirmation
+      newStatus = 'pending_student_confirmation';
+    } else if (req.user.role === 'student' && 
+               (date || time || location) && appointment.status === 'confirmed') {
+      // Student edited confirmed appointment - need advisor confirmation
+      newStatus = 'pending_advisor_confirmation';
+    }
 
     const result = await pool.query(
       `UPDATE appointments 
-       SET date = COALESCE($1, date), 
-           time = COALESCE($2, time), 
-           location = COALESCE($3, location), 
-           notes = COALESCE($4, notes),
+       SET title = COALESCE($1, title),
+           date = COALESCE($2, date), 
+           time = COALESCE($3, time), 
+           location = COALESCE($4, location), 
+           notes = COALESCE($5, notes),
+           status = $7,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $5
+       WHERE id = $6
        RETURNING *`,
-      [date, time, location, notes, id]
+      [title, date, time, location, notes, id, newStatus]
     );
 
     const updatedAppointment = result.rows[0];
+
+    // Send notification to students if advisor edited the appointment
+    if (newStatus === 'pending_student_confirmation') {
+      // If appointment has student_id, notify that student
+      if (appointment.student_id) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, title, message, related_id)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            appointment.student_id,
+            'appointment',
+            'อาจารย์แก้ไขนัดหมาย',
+            `อาจารย์ได้แก้ไขนัดหมายของคุณ กรุณายืนยันการเปลี่ยนแปลง`,
+            id
+          ]
+        );
+      } else if (appointment.project_id) {
+        // If appointment is project-based, notify all students in the project
+        const studentsResult = await pool.query(
+          'SELECT student_id FROM project_students WHERE project_id = $1',
+          [appointment.project_id]
+        );
+        
+        for (const studentRow of studentsResult.rows) {
+          await pool.query(
+            `INSERT INTO notifications (user_id, type, title, message, related_id)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [
+              studentRow.student_id,
+              'appointment',
+              'อาจารย์แก้ไขนัดหมาย',
+              `อาจารย์ได้แก้ไขนัดหมายของโปรเจค กรุณายืนยันการเปลี่ยนแปลง`,
+              id
+            ]
+          );
+        }
+      }
+    }
+    
+    // Send notification to advisor if student edited the appointment
+    if (newStatus === 'pending_advisor_confirmation' && appointment.advisor_id) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, message, related_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          appointment.advisor_id,
+          'appointment',
+          'นักศึกษาแก้ไขนัดหมาย',
+          `นักศึกษาได้แก้ไขนัดหมาย กรุณายืนยันการเปลี่ยนแปลง`,
+          id
+        ]
+      );
+    }
 
     res.json({
       success: true,
       data: {
         id: updatedAppointment.id,
+        title: updatedAppointment.title,
         date: updatedAppointment.date,
         time: updatedAppointment.time,
         location: updatedAppointment.location,
@@ -536,6 +609,278 @@ router.put('/:id', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'เกิดข้อผิดพลาดในการอัปเดตนัดหมาย'
+    });
+  }
+});
+
+// Advisor confirms student's changes
+router.put('/:id/advisor-confirm-changes', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if appointment exists and user is the advisor
+    const appointmentCheck = await pool.query(
+      'SELECT * FROM appointments WHERE id = $1 AND advisor_id = $2',
+      [id, req.user.id]
+    );
+
+    if (appointmentCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'ไม่พบนัดหมายนี้'
+      });
+    }
+
+    const appointment = appointmentCheck.rows[0];
+
+    // Check if appointment is pending advisor confirmation
+    if (appointment.status !== 'pending_advisor_confirmation') {
+      return res.status(400).json({
+        success: false,
+        message: 'นัดหมายนี้ไม่ได้รอการยืนยันจากอาจารย์'
+      });
+    }
+
+    // Update status to confirmed
+    const result = await pool.query(
+      'UPDATE appointments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      ['confirmed', id]
+    );
+
+    const updatedAppointment = result.rows[0];
+
+    // Send notification to student
+    if (appointment.student_id) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, message, related_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          appointment.student_id,
+          'appointment',
+          'อาจารย์ยืนยันการเปลี่ยนแปลง',
+          `อาจารย์ยืนยันการเปลี่ยนแปลงนัดหมายแล้ว`,
+          id
+        ]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'ยืนยันการเปลี่ยนแปลงนัดหมายเรียบร้อยแล้ว',
+      data: {
+        id: updatedAppointment.id,
+        title: updatedAppointment.title,
+        date: updatedAppointment.date,
+        time: updatedAppointment.time,
+        location: updatedAppointment.location,
+        notes: updatedAppointment.notes,
+        status: updatedAppointment.status,
+        studentId: updatedAppointment.student_id,
+        advisorId: updatedAppointment.advisor_id,
+        projectId: updatedAppointment.project_id
+      }
+    });
+  } catch (error) {
+    console.error('Advisor confirm changes error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'เกิดข้อผิดพลาดในการยืนยันการเปลี่ยนแปลง'
+    });
+  }
+});
+
+// Student confirms advisor's changes
+router.put('/:id/confirm-changes', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if appointment exists and student is the owner
+    const appointmentCheck = await pool.query(
+      'SELECT * FROM appointments WHERE id = $1 AND student_id = $2',
+      [id, req.user.id]
+    );
+
+    if (appointmentCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'ไม่พบนัดหมายนี้'
+      });
+    }
+
+    const appointment = appointmentCheck.rows[0];
+
+    // Check if appointment is pending student confirmation
+    if (appointment.status !== 'pending_student_confirmation') {
+      return res.status(400).json({
+        success: false,
+        message: 'นัดหมายนี้ไม่ได้รอการยืนยันจากนักศึกษา'
+      });
+    }
+
+    // Update status to confirmed
+    const result = await pool.query(
+      'UPDATE appointments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      ['confirmed', id]
+    );
+
+    const updatedAppointment = result.rows[0];
+
+    // Send notification to advisor
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, title, message, related_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        appointment.advisor_id,
+        'appointment',
+        'นักศึกษายืนยันการเปลี่ยนแปลง',
+        `นักศึกษายืนยันการเปลี่ยนแปลงนัดหมายแล้ว`,
+        id
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: 'ยืนยันการเปลี่ยนแปลงนัดหมายเรียบร้อยแล้ว',
+      data: {
+        id: updatedAppointment.id,
+        title: updatedAppointment.title,
+        date: updatedAppointment.date,
+        time: updatedAppointment.time,
+        location: updatedAppointment.location,
+        notes: updatedAppointment.notes,
+        status: updatedAppointment.status,
+        studentId: updatedAppointment.student_id,
+        advisorId: updatedAppointment.advisor_id,
+        projectId: updatedAppointment.project_id
+      }
+    });
+  } catch (error) {
+    console.error('Confirm changes error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'เกิดข้อผิดพลาดในการยืนยันการเปลี่ยนแปลง'
+    });
+  }
+});
+
+// Update appointment status (confirm, reject, complete, fail)
+router.put('/:id/status/:status', authenticateToken, async (req, res) => {
+  try {
+    const { id, status } = req.params;
+
+    // Validate status
+    const validStatuses = ['confirmed', 'rejected', 'completed', 'failed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'สถานะไม่ถูกต้อง'
+      });
+    }
+
+    // Check if user has access to update this appointment
+    const appointmentCheck = await pool.query(
+      'SELECT * FROM appointments WHERE id = $1 AND (student_id = $2 OR advisor_id = $2)',
+      [id, req.user.id]
+    );
+
+    if (appointmentCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'ไม่พบนัดหมายนี้'
+      });
+    }
+
+    const appointment = appointmentCheck.rows[0];
+
+    // Authorization logic
+    if (status === 'confirmed' || status === 'rejected') {
+      if (req.user.role !== 'advisor') {
+        return res.status(403).json({
+          success: false,
+          message: 'เฉพาะอาจารย์ที่ปรึกษาที่สามารถยืนยันหรือปฏิเสธนัดหมายได้'
+        });
+      }
+      if (appointment.status !== 'pending') {
+        return res.status(400).json({
+          success: false,
+          message: 'นัดหมายนี้ไม่ได้อยู่ในสถานะรอการยืนยัน'
+        });
+      }
+    } else if (status === 'completed' || status === 'failed') {
+      // Both student and advisor can mark as completed/failed
+      if (appointment.status !== 'confirmed') {
+        return res.status(400).json({
+          success: false,
+          message: 'นัดหมายต้องได้รับการยืนยันก่อนจึงจะสามารถเปลี่ยนเป็นเสร็จสิ้นหรือไม่มาตามนัดได้'
+        });
+      }
+    } else if (status === 'cancelled') {
+      // Both student and advisor can cancel, but not if completed/failed/rejected
+      if (['completed', 'failed', 'rejected'].includes(appointment.status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'ไม่สามารถยกเลิกนัดหมายที่เสร็จสิ้น ถูกปฏิเสธ หรือไม่มาตามนัดแล้ว'
+        });
+      }
+    }
+
+    const result = await pool.query(
+      'UPDATE appointments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      [status, id]
+    );
+
+    const updatedAppointment = result.rows[0];
+
+    // Send notifications based on status change
+    if (status === 'confirmed') {
+      // Notify student
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, message, related_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          appointment.student_id,
+          'appointment',
+          'นัดหมายได้รับการยืนยัน',
+          `นัดหมายของคุณได้รับการยืนยันแล้ว`,
+          id
+        ]
+      );
+    } else if (status === 'rejected') {
+      // Notify student
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, message, related_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          appointment.student_id,
+          'appointment',
+          'นัดหมายถูกปฏิเสธ',
+          `นัดหมายของคุณถูกปฏิเสธ`,
+          id
+        ]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `อัปเดตสถานะนัดหมายเป็น ${status} เรียบร้อยแล้ว`,
+      data: {
+        id: updatedAppointment.id,
+        title: updatedAppointment.title,
+        date: updatedAppointment.date,
+        time: updatedAppointment.time,
+        location: updatedAppointment.location,
+        notes: updatedAppointment.notes,
+        status: updatedAppointment.status,
+        studentId: updatedAppointment.student_id,
+        advisorId: updatedAppointment.advisor_id,
+        projectId: updatedAppointment.project_id
+      }
+    });
+  } catch (error) {
+    console.error('Update appointment status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'เกิดข้อผิดพลาดในการอัปเดตสถานะนัดหมาย'
     });
   }
 });
@@ -560,11 +905,11 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     const appointment = appointmentCheck.rows[0];
 
-    // Check if appointment can be deleted (not completed, failed, or rejected)
-    if (['completed', 'failed', 'rejected'].includes(appointment.status)) {
+    // Check if appointment can be deleted (not completed, failed, rejected, or no_response)
+    if (['completed', 'failed', 'rejected', 'no_response'].includes(appointment.status)) {
       return res.status(400).json({
         success: false,
-        message: 'ไม่สามารถลบนัดหมายที่เสร็จสิ้น ถูกปฏิเสธ หรือไม่มาตามนัดแล้ว'
+        message: 'ไม่สามารถลบนัดหมายที่เสร็จสิ้น ถูกปฏิเสธ ไม่มาตามนัด หรือไม่ตอบรับแล้ว'
       });
     }
 
@@ -874,75 +1219,7 @@ router.put('/:id/complete', authenticateToken, async (req, res) => {
   }
 });
 
-// Update appointment status (for attendance confirmation)
-router.put('/:id/status', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    if (!status || !['completed', 'failed'].includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: 'สถานะไม่ถูกต้อง ต้องเป็น completed หรือ failed'
-      });
-    }
-
-    if (req.user.role !== 'advisor') {
-      return res.status(403).json({
-        success: false,
-        message: 'เฉพาะอาจารย์ที่ปรึกษาที่สามารถอัปเดตสถานะการมาตามนัดได้'
-      });
-    }
-
-    // Check if appointment exists and is confirmed
-    const appointmentResult = await pool.query(
-      'SELECT * FROM appointments WHERE id = $1 AND status = $2 AND advisor_id = $3',
-      [id, 'confirmed', req.user.id]
-    );
-
-    if (appointmentResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'ไม่พบนัดหมายที่ยืนยันแล้ว'
-      });
-    }
-
-    const result = await pool.query(
-      'UPDATE appointments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      [status, id]
-    );
-
-    const updatedAppointment = result.rows[0];
-
-    // Create notification for student if they exist
-    if (updatedAppointment.student_id) {
-      const message = status === 'completed' 
-        ? 'นัดหมายของคุณได้รับการยืนยันว่าเสร็จสิ้นแล้ว'
-        : 'นัดหมายของคุณได้รับการยืนยันว่าไม่มาตามนัด';
-      
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, title, message, appointment_id, created_at)
-         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-        [updatedAppointment.student_id, 'appointment_status_updated', 'อัปเดตสถานะนัดหมาย', message, id]
-      );
-    }
-
-    res.json({
-      success: true,
-      data: {
-        id: updatedAppointment.id,
-        status: updatedAppointment.status,
-        updatedAt: updatedAppointment.updated_at
-      }
-    });
-  } catch (error) {
-    console.error('Update appointment status error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'เกิดข้อผิดพลาดในการอัปเดตสถานะนัดหมาย'
-    });
-  }
-});
+// Route /:id/status ถูกแทนที่ด้วย /:id/status/:status แล้ว (บรรทัด 767)
 
 // Add comment to appointment
 router.post('/:id/comments', authenticateToken, async (req, res) => {
@@ -1052,6 +1329,39 @@ router.get('/:id/comments', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'เกิดข้อผิดพลาดในการดึงข้อมูลคอมเมนต์'
+    });
+  }
+});
+
+// Check expired appointments (for pending and pending_student_confirmation)
+router.post('/check-expired', authenticateToken, async (req, res) => {
+  try {
+    const now = new Date();
+    
+    // Find appointments that are past their date/time and still pending confirmation
+    const query = `
+      UPDATE appointments 
+      SET status = 'no_response', updated_at = CURRENT_TIMESTAMP
+      WHERE (status = 'pending' OR status = 'pending_student_confirmation')
+        AND (date < $1 OR (date = $1 AND time < $2))
+      RETURNING *
+    `;
+    
+    const currentDate = now.toISOString().split('T')[0];
+    const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
+    
+    const result = await pool.query(query, [currentDate, currentTime]);
+    
+    res.json({
+      success: true,
+      message: `Updated ${result.rows.length} expired appointments`,
+      count: result.rows.length
+    });
+  } catch (error) {
+    console.error('Check expired appointments error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'เกิดข้อผิดพลาดในการตรวจสอบนัดหมายที่เลยเวลา'
     });
   }
 });

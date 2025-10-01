@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import Appointments from './pages/Appointments';
 import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
+import ArchivedProjects from './pages/ArchivedProjects';
 import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
 import Users from './pages/Users';
@@ -34,6 +35,30 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   return <>{children}</>;
+};
+
+// Home redirect based on role
+const HomeRedirect: React.FC = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // นักศึกษาไปหน้า Appointments, อาจารย์ไปหน้า Dashboard
+  if (user.role === 'student') {
+    return <Navigate to="/appointments" replace />;
+  } else {
+    return <Navigate to="/dashboard" replace />;
+  }
 };
 
 
@@ -80,6 +105,16 @@ const AppContent: React.FC = () => {
             <ProtectedRoute>
               <Layout>
                 <ProjectDetail />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/archived-projects"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <ArchivedProjects />
               </Layout>
             </ProtectedRoute>
           }
@@ -132,7 +167,7 @@ const AppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<HomeRedirect />} />
       </Routes>
     </Router>
   );

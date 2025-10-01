@@ -24,7 +24,10 @@ const Appointments: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [sortBy, setSortBy] = useState<'date' | 'status' | 'project'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [formData, setFormData] = useState({
+    title: '',
     date: '',
     time: '',
     location: '',
@@ -34,6 +37,18 @@ const Appointments: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     try {
+      // Check for expired appointments first
+      try {
+        await fetch('http://localhost:3001/api/appointments/check-expired', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+      } catch (error) {
+        console.log('Check expired appointments failed:', error);
+      }
+
       const [appointmentsData, projectsData] = await Promise.all([
         appointmentAPI.getAppointments(),
         projectAPI.getProjects()
@@ -83,6 +98,7 @@ const Appointments: React.FC = () => {
         }
         
         appointmentData = {
+          title: formData.title,
           date: formData.date,
           time: formData.time,
           location: formData.location,
@@ -99,7 +115,7 @@ const Appointments: React.FC = () => {
       
       await appointmentAPI.createAppointment(appointmentData);
       setShowCreateModal(false);
-      setFormData({ date: '', time: '', location: '', notes: '', projectId: '' });
+      setFormData({ title: '', date: '', time: '', location: '', notes: '', projectId: '' });
       fetchData();
     } catch (error) {
       console.error('Failed to create appointment:', error);
@@ -132,6 +148,7 @@ const Appointments: React.FC = () => {
         }
         
         appointmentData = {
+          title: formData.title,
           date: new Date(formData.date),
           time: formData.time,
           location: formData.location,
@@ -149,7 +166,7 @@ const Appointments: React.FC = () => {
       await appointmentAPI.updateAppointment(selectedAppointment.id, appointmentData);
       setShowEditModal(false);
       setSelectedAppointment(null);
-      setFormData({ date: '', time: '', location: '', notes: '', projectId: '' });
+      setFormData({ title: '', date: '', time: '', location: '', notes: '', projectId: '' });
       fetchData();
     } catch (error) {
       console.error('Failed to update appointment:', error);
@@ -215,10 +232,18 @@ const Appointments: React.FC = () => {
         return <XCircle className="h-5 w-5 text-red-500" />;
       case 'pending':
         return <AlertCircle className="h-5 w-5 text-yellow-500" />;
+      case 'pending_student_confirmation':
+        return <AlertCircle className="h-5 w-5 text-blue-500" />;
+      case 'pending_advisor_confirmation':
+        return <AlertCircle className="h-5 w-5 text-purple-500" />;
       case 'completed':
         return <CheckCircle className="h-5 w-5 text-green-600" />;
       case 'failed':
         return <XCircle className="h-5 w-5 text-red-600" />;
+      case 'no_response':
+        return <AlertCircle className="h-5 w-5 text-orange-500" />;
+      case 'cancelled':
+        return <XCircle className="h-5 w-5 text-gray-500" />;
       default:
         return <Clock className="h-5 w-5 text-gray-500" />;
     }
@@ -239,17 +264,105 @@ const Appointments: React.FC = () => {
           // Advisor created appointment, waiting for student
           return 'รอการยืนยันจากนักศึกษา';
         }
+      case 'pending_student_confirmation':
+        return 'รอนักศึกษายืนยันการเปลี่ยนแปลง';
+      case 'pending_advisor_confirmation':
+        return 'รออาจารย์ยืนยันการเปลี่ยนแปลง';
       case 'cancelled':
         return 'ยกเลิก';
       case 'completed':
         return 'เสร็จสิ้น';
       case 'failed':
         return 'ไม่มาตามนัด';
+      case 'no_response':
+        return 'ไม่ตอบรับนัดหมาย';
       default:
         return status;
     }
   };
 
+  const handleConfirmChanges = async (appointmentId: string) => {
+    try {
+      const response = await fetch(`http://localhost:3001/api/appointments/${appointmentId}/confirm-changes`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        alert('ยืนยันการเปลี่ยนแปลงนัดหมายเรียบร้อยแล้ว');
+        fetchData();
+      } else {
+        const error = await response.json();
+        alert(`เกิดข้อผิดพลาด: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error confirming changes:', error);
+      alert('เกิดข้อผิดพลาดในการยืนยันการเปลี่ยนแปลง');
+    }
+  };
+
+  const handleAdvisorConfirmChanges = async (appointmentId: string) => {
+    try {
+      const response = await fetch(`http://localhost:3001/api/appointments/${appointmentId}/advisor-confirm-changes`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        alert('ยืนยันการเปลี่ยนแปลงนัดหมายเรียบร้อยแล้ว');
+        fetchData();
+      } else {
+        const error = await response.json();
+        alert(`เกิดข้อผิดพลาด: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error confirming changes:', error);
+      alert('เกิดข้อผิดพลาดในการยืนยันการเปลี่ยนแปลง');
+    }
+  };
+
+  // Sort appointments
+  const sortedAppointments = [...appointments].sort((a, b) => {
+    let comparison = 0;
+
+    if (sortBy === 'date') {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      comparison = dateA - dateB;
+    } else if (sortBy === 'status') {
+      const statusOrder: { [key: string]: number } = {
+        'pending': 1,                           // รอยืนยัน (สำคัญที่สุด)
+        'pending_student_confirmation': 2,      // รอนักศึกษายืนยัน
+        'pending_advisor_confirmation': 3,      // รออาจารย์ยืนยัน
+        'confirmed': 4,                         // ยืนยันแล้ว
+        'completed': 5,                         // เสร็จสิ้น
+        'failed': 6,                            // ไม่มาตามนัด
+        'no_response': 7,                       // ไม่ตอบรับ
+        'rejected': 8,                          // ปฏิเสธ
+        'cancelled': 9                          // ยกเลิก
+      };
+      comparison = (statusOrder[a.status] || 10) - (statusOrder[b.status] || 10);
+      
+      // ถ้าสถานะเท่ากัน ให้เรียงตามวันที่ (วันที่ใกล้ก่อน)
+      if (comparison === 0) {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        comparison = dateA - dateB;
+      }
+    } else if (sortBy === 'project') {
+      const projectA = a.project?.name || '';
+      const projectB = b.project?.name || '';
+      comparison = projectA.localeCompare(projectB, 'th');
+    }
+
+    return sortOrder === 'asc' ? comparison : -comparison;
+  });
 
   if (loading) {
     return (
@@ -272,13 +385,44 @@ const Appointments: React.FC = () => {
         </button>
       </div>
 
+      {/* Sort Controls */}
+      <div className="bg-white rounded-lg shadow p-4">
+        <div className="flex items-center space-x-4">
+          <span className="text-sm font-medium text-gray-700">เรียงตาม:</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as 'date' | 'status' | 'project')}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="date">วันที่</option>
+            <option value="status">สถานะ</option>
+            <option value="project">โปรเจค</option>
+          </select>
+
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="asc">
+              {sortBy === 'date' ? 'เก่า → ใหม่' : sortBy === 'status' ? 'สำคัญก่อน' : 'A → Z'}
+            </option>
+            <option value="desc">
+              {sortBy === 'date' ? 'ใหม่ → เก่า' : sortBy === 'status' ? 'เสร็จแล้วก่อน' : 'Z → A'}
+            </option>
+          </select>
+
+          <span className="text-sm text-gray-600">
+            ทั้งหมด {appointments.length} รายการ
+          </span>
+        </div>
+      </div>
+
 
       {/* Appointments List */}
       <div className="bg-white shadow overflow-hidden sm:rounded-md">
         <ul className="divide-y divide-gray-200">
-          {appointments
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-            .map((appointment) => (
+          {sortedAppointments.map((appointment) => (
             <li key={appointment.id}>
               <div className="px-4 py-4 sm:px-6">
                 <div className="flex items-center justify-between">
@@ -286,22 +430,32 @@ const Appointments: React.FC = () => {
                     {getStatusIcon(appointment.status)}
                     <div className="ml-4">
                       <div className="flex items-center">
-                        <p className="text-sm font-medium text-gray-900">
-                          {appointment.project 
-                            ? `โปรเจค: ${appointment.project.name}`
-                            : user?.role === 'student' 
-                              ? `อาจารย์ที่ปรึกษา: ${appointment.advisor.firstName} ${appointment.advisor.lastName}`
-                              : appointment.student 
-                                ? `${appointment.student.firstName} ${appointment.student.lastName}`
-                                : 'ไม่ระบุผู้ใช้'
-                          }
-                        </p>
-                        <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          appointment.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                          appointment.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                          appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
+                        <div>
+                          <p className="text-lg font-semibold text-gray-900 mb-1">
+                            {appointment.project 
+                              ? `โปรเจค: ${appointment.project.name}`
+                              : user?.role === 'student' 
+                                ? `อาจารย์ที่ปรึกษา: ${appointment.advisor.firstName} ${appointment.advisor.lastName}`
+                                : appointment.student 
+                                  ? `${appointment.student.firstName} ${appointment.student.lastName}`
+                                  : 'ไม่ระบุผู้ใช้'
+                            }
+                          </p>
+                          {appointment.title && (
+                            <p className="text-sm font-medium text-gray-600">
+                              {appointment.title}
+                            </p>
+                          )}
+                        </div>
+                               <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                 appointment.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                                 appointment.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                 appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                 appointment.status === 'pending_student_confirmation' ? 'bg-blue-100 text-blue-800' :
+                                 appointment.status === 'pending_advisor_confirmation' ? 'bg-purple-100 text-purple-800' :
+                                 appointment.status === 'no_response' ? 'bg-orange-100 text-orange-800' :
+                                 'bg-gray-100 text-gray-800'
+                               }`}>
                           {getStatusText(appointment.status, appointment)}
                         </span>
                       </div>
@@ -365,6 +519,24 @@ const Appointments: React.FC = () => {
                         </button>
                       </>
                     )}
+                    {appointment.status === 'pending_student_confirmation' && user?.role === 'student' && (
+                      <button
+                        onClick={() => handleConfirmChanges(appointment.id)}
+                        className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded text-white bg-blue-600 hover:bg-blue-700"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        ยืนยันการเปลี่ยนแปลง
+                      </button>
+                    )}
+                    {appointment.status === 'pending_advisor_confirmation' && user?.role === 'advisor' && (
+                      <button
+                        onClick={() => handleAdvisorConfirmChanges(appointment.id)}
+                        className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded text-white bg-purple-600 hover:bg-purple-700"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        ยืนยันการเปลี่ยนแปลง
+                      </button>
+                    )}
                     {appointment.status === 'confirmed' && user?.role === 'advisor' && (
                       <>
                         <button
@@ -383,13 +555,14 @@ const Appointments: React.FC = () => {
                         </button>
                       </>
                     )}
-                    {/* แสดงปุ่มแก้ไขและลบเฉพาะเมื่อนัดหมายยังไม่เสร็จสิ้นหรือถูกปฏิเสธ */}
-                    {!['completed', 'failed', 'rejected'].includes(appointment.status) && (
+                    {/* แสดงปุ่มแก้ไขและลบเฉพาะเมื่อนัดหมายยังไม่เสร็จสิ้น ไม่ถูกปฏิเสธ และไม่รอการยืนยัน */}
+                    {!['completed', 'failed', 'rejected', 'no_response', 'pending_student_confirmation', 'pending_advisor_confirmation'].includes(appointment.status) && (
                       <>
                         <button
                           onClick={() => {
                             setSelectedAppointment(appointment);
                             setFormData({
+                              title: appointment.title || '',
                               date: format(new Date(appointment.date), 'yyyy-MM-dd'),
                               time: appointment.time,
                               location: appointment.location,
@@ -427,6 +600,17 @@ const Appointments: React.FC = () => {
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">สร้างนัดหมายใหม่</h3>
               <form onSubmit={handleCreateAppointment} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">หัวข้อการนัดหมาย</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="เช่น ปรึกษาโครงงาน, รายงานความคืบหน้า"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">วันที่</label>
                   <input
@@ -515,6 +699,17 @@ const Appointments: React.FC = () => {
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">แก้ไขนัดหมาย</h3>
               <form onSubmit={handleUpdateAppointment} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">หัวข้อการนัดหมาย</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="เช่น ปรึกษาโครงงาน, รายงานความคืบหน้า"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">วันที่</label>
                   <input

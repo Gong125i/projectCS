@@ -16,6 +16,7 @@ app.use('/api/projects', require('./routes/projects'));
 app.use('/api/appointments', require('./routes/appointments'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/import', require('./routes/import'));
+app.use('/api/project-archive', require('./routes/projectArchive'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

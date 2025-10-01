@@ -1,0 +1,437 @@
+# 🗄️ Database Schema - ระบบจัดเก็บโปรเจคที่สำเร็จแล้ว
+
+## 📋 ภาพรวม Database Schema
+โครงสร้างฐานข้อมูลสำหรับระบบจัดเก็บโปรเจคที่สำเร็จแล้ว พร้อมระบบค้นหาชื่อโปรเจคและปีการศึกษา
+
+---
+
+## 🗃️ Tables Structure
+
+### 1. users (ตารางผู้ใช้)
+```sql
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    student_id VARCHAR(20) UNIQUE NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('student', 'advisor', 'admin')),
+    major VARCHAR(100),
+    year INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX idx_users_student_id ON users(student_id);
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_major ON users(major);
+```
+
+### 2. projects (ตารางโปรเจค)
+```sql
+CREATE TABLE projects (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    advisor_id INTEGER NOT NULL REFERENCES users(id),
+    status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'archived')),
+    academic_year VARCHAR(10) NOT NULL,
+    semester VARCHAR(10) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX idx_projects_advisor_id ON projects(advisor_id);
+CREATE INDEX idx_projects_status ON projects(status);
+CREATE INDEX idx_projects_academic_year ON projects(academic_year);
+CREATE INDEX idx_projects_semester ON projects(semester);
+```
+
+### 3. project_students (ตารางนักศึกษาในโปรเจค)
+```sql
+CREATE TABLE project_students (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(project_id, student_id)
+);
+
+-- Indexes
+CREATE INDEX idx_project_students_project_id ON project_students(project_id);
+CREATE INDEX idx_project_students_student_id ON project_students(student_id);
+```
+
+### 4. project_archive (ตารางคลังโปรเจคที่สำเร็จแล้ว)
+```sql
+CREATE TABLE project_archive (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id),
+    project_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    advisor_name VARCHAR(255) NOT NULL,
+    student_names TEXT[] NOT NULL,
+    academic_year VARCHAR(10) NOT NULL,
+    semester VARCHAR(10) NOT NULL,
+    completion_date DATE NOT NULL,
+    final_grade VARCHAR(5),
+    project_type VARCHAR(100),
+    technology_used TEXT[],
+    keywords TEXT[],
+    archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX idx_project_archive_project_id ON project_archive(project_id);
+CREATE INDEX idx_project_archive_project_name ON project_archive(project_name);
+CREATE INDEX idx_project_archive_academic_year ON project_archive(academic_year);
+CREATE INDEX idx_project_archive_semester ON project_archive(semester);
+CREATE INDEX idx_project_archive_advisor_name ON project_archive(advisor_name);
+CREATE INDEX idx_project_archive_final_grade ON project_archive(final_grade);
+CREATE INDEX idx_project_archive_completion_date ON project_archive(completion_date);
+CREATE INDEX idx_project_archive_archived_at ON project_archive(archived_at);
+
+-- Full-text search index
+CREATE INDEX idx_project_archive_search ON project_archive USING gin(
+    to_tsvector('thai', project_name || ' ' || description || ' ' || array_to_string(keywords, ' '))
+);
+```
+
+### 5. appointments (ตารางการนัดหมาย)
+```sql
+CREATE TABLE appointments (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    advisor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    appointment_date TIMESTAMP NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'rejected', 'completed')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX idx_appointments_project_id ON appointments(project_id);
+CREATE INDEX idx_appointments_student_id ON appointments(student_id);
+CREATE INDEX idx_appointments_advisor_id ON appointments(advisor_id);
+CREATE INDEX idx_appointments_status ON appointments(status);
+CREATE INDEX idx_appointments_appointment_date ON appointments(appointment_date);
+```
+
+### 6. comments (ตารางความคิดเห็น)
+```sql
+CREATE TABLE comments (
+    id SERIAL PRIMARY KEY,
+    appointment_id INTEGER NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX idx_comments_appointment_id ON comments(appointment_id);
+CREATE INDEX idx_comments_user_id ON comments(user_id);
+CREATE INDEX idx_comments_created_at ON comments(created_at);
+```
+
+### 7. notifications (ตารางการแจ้งเตือน)
+```sql
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX idx_notifications_type ON notifications(type);
+CREATE INDEX idx_notifications_created_at ON notifications(created_at);
+```
+
+### 8. search_history (ตารางประวัติการค้นหา)
+```sql
+CREATE TABLE search_history (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    search_query TEXT NOT NULL,
+    search_filters JSONB,
+    results_count INTEGER,
+    searched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX idx_search_history_user_id ON search_history(user_id);
+CREATE INDEX idx_search_history_searched_at ON search_history(searched_at);
+CREATE INDEX idx_search_history_search_query ON search_history USING gin(to_tsvector('thai', search_query));
+```
+
+---
+
+## 🔧 Database Functions & Triggers
+
+### 1. Function: Update updated_at timestamp
+```sql
+-- Function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Triggers for all tables
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON projects
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_project_archive_updated_at BEFORE UPDATE ON project_archive
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_appointments_updated_at BEFORE UPDATE ON appointments
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_comments_updated_at BEFORE UPDATE ON comments
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_notifications_updated_at BEFORE UPDATE ON notifications
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+```
+
+### 2. Function: Archive completed project
+```sql
+-- Function to archive completed project
+CREATE OR REPLACE FUNCTION archive_completed_project(project_id INTEGER)
+RETURNS INTEGER AS $$
+DECLARE
+    archive_id INTEGER;
+    project_record RECORD;
+    advisor_record RECORD;
+    student_names TEXT[];
+BEGIN
+    -- Get project details
+    SELECT p.*, u.first_name, u.last_name
+    INTO project_record, advisor_record
+    FROM projects p
+    JOIN users u ON p.advisor_id = u.id
+    WHERE p.id = project_id AND p.status = 'completed';
+    
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Project not found or not completed';
+    END IF;
+    
+    -- Get student names
+    SELECT ARRAY_AGG(u.first_name || ' ' || u.last_name)
+    INTO student_names
+    FROM project_students ps
+    JOIN users u ON ps.student_id = u.id
+    WHERE ps.project_id = project_id;
+    
+    -- Insert into archive
+    INSERT INTO project_archive (
+        project_id, project_name, description, advisor_name,
+        student_names, academic_year, semester, completion_date,
+        final_grade, project_type, technology_used, keywords
+    ) VALUES (
+        project_id, project_record.name, project_record.description,
+        advisor_record.first_name || ' ' || advisor_record.last_name,
+        student_names, project_record.academic_year, project_record.semester,
+        CURRENT_DATE, 'A', 'Web Application', 
+        ARRAY['React', 'Node.js', 'PostgreSQL'],
+        ARRAY['การนัดหมาย', 'ระบบจัดการ']
+    ) RETURNING id INTO archive_id;
+    
+    -- Update project status
+    UPDATE projects SET status = 'archived' WHERE id = project_id;
+    
+    RETURN archive_id;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### 3. Function: Search projects
+```sql
+-- Function to search projects in archive
+CREATE OR REPLACE FUNCTION search_archived_projects(
+    search_query TEXT DEFAULT '',
+    academic_year_filter VARCHAR(10) DEFAULT '',
+    semester_filter VARCHAR(10) DEFAULT '',
+    advisor_filter VARCHAR(255) DEFAULT '',
+    technology_filter TEXT DEFAULT '',
+    grade_filter VARCHAR(5) DEFAULT ''
+)
+RETURNS TABLE (
+    id INTEGER,
+    project_name VARCHAR(255),
+    description TEXT,
+    advisor_name VARCHAR(255),
+    student_names TEXT[],
+    academic_year VARCHAR(10),
+    semester VARCHAR(10),
+    completion_date DATE,
+    final_grade VARCHAR(5),
+    project_type VARCHAR(100),
+    technology_used TEXT[],
+    keywords TEXT[]
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        pa.id, pa.project_name, pa.description, pa.advisor_name,
+        pa.student_names, pa.academic_year, pa.semester,
+        pa.completion_date, pa.final_grade, pa.project_type,
+        pa.technology_used, pa.keywords
+    FROM project_archive pa
+    WHERE 
+        (search_query = '' OR to_tsvector('thai', pa.project_name || ' ' || pa.description || ' ' || array_to_string(pa.keywords, ' ')) @@ plainto_tsquery('thai', search_query))
+        AND (academic_year_filter = '' OR pa.academic_year = academic_year_filter)
+        AND (semester_filter = '' OR pa.semester = semester_filter)
+        AND (advisor_filter = '' OR pa.advisor_name ILIKE '%' || advisor_filter || '%')
+        AND (technology_filter = '' OR pa.technology_used @> ARRAY[technology_filter])
+        AND (grade_filter = '' OR pa.final_grade = grade_filter)
+    ORDER BY pa.completion_date DESC;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+---
+
+## 📊 Sample Data
+
+### 1. Sample Users
+```sql
+-- Insert sample users
+INSERT INTO users (student_id, first_name, last_name, email, password, role, major, year) VALUES
+('0001', 'สมศักดิ์', 'เรียนดี', 'somsak@example.com', 'password123', 'student', 'Computer Science', 4),
+('0002', 'สมพร', 'เก่งมาก', 'somporn@example.com', 'password123', 'student', 'Computer Science', 4),
+('0003', 'สมชาย', 'ใจดี', 'somchai@example.com', 'password123', 'advisor', 'Computer Science', NULL),
+('0004', 'สมหญิง', 'สอนดี', 'somying@example.com', 'password123', 'advisor', 'Computer Science', NULL);
+```
+
+### 2. Sample Projects
+```sql
+-- Insert sample projects
+INSERT INTO projects (name, description, advisor_id, status, academic_year, semester) VALUES
+('ระบบจัดการการนัดหมาย', 'ระบบจัดการการนัดหมายระหว่างอาจารย์ที่ปรึกษาและนักศึกษา', 3, 'completed', '2567', '1'),
+('ระบบจัดการคลังสินค้า', 'ระบบจัดการคลังสินค้าสำหรับร้านค้าออนไลน์', 4, 'completed', '2567', '1'),
+('ระบบจองห้องประชุม', 'ระบบจองห้องประชุมออนไลน์', 3, 'active', '2567', '2');
+```
+
+### 3. Sample Project Students
+```sql
+-- Insert sample project students
+INSERT INTO project_students (project_id, student_id) VALUES
+(1, 1), (1, 2),  -- Project 1 has students 1 and 2
+(2, 1);          -- Project 2 has student 1
+```
+
+### 4. Sample Project Archive
+```sql
+-- Insert sample archived projects
+INSERT INTO project_archive (
+    project_id, project_name, description, advisor_name,
+    student_names, academic_year, semester, completion_date,
+    final_grade, project_type, technology_used, keywords
+) VALUES
+(1, 'ระบบจัดการการนัดหมาย', 'ระบบจัดการการนัดหมายระหว่างอาจารย์ที่ปรึกษาและนักศึกษา', 'สมชาย ใจดี',
+ ARRAY['สมศักดิ์ เรียนดี', 'สมพร เก่งมาก'], '2567', '1', '2024-03-15',
+ 'A', 'Web Application', ARRAY['React', 'Node.js', 'PostgreSQL'], ARRAY['การนัดหมาย', 'ระบบจัดการ']),
+(2, 'ระบบจัดการคลังสินค้า', 'ระบบจัดการคลังสินค้าสำหรับร้านค้าออนไลน์', 'สมหญิง สอนดี',
+ ARRAY['สมศักดิ์ เรียนดี'], '2567', '1', '2024-03-20',
+ 'B+', 'Web Application', ARRAY['Vue.js', 'Laravel', 'MySQL'], ARRAY['คลังสินค้า', 'ร้านค้าออนไลน์']);
+```
+
+---
+
+## 🔍 Query Examples
+
+### 1. Search projects by name
+```sql
+-- Search projects by name
+SELECT * FROM search_archived_projects('ระบบจัดการ');
+```
+
+### 2. Search projects by year
+```sql
+-- Search projects by academic year
+SELECT * FROM search_archived_projects('', '2567');
+```
+
+### 3. Search projects by technology
+```sql
+-- Search projects by technology
+SELECT * FROM search_archived_projects('', '', '', '', 'React');
+```
+
+### 4. Get project statistics
+```sql
+-- Get project statistics by year
+SELECT 
+    academic_year,
+    COUNT(*) as project_count,
+    AVG(CASE WHEN final_grade = 'A' THEN 4.0
+             WHEN final_grade = 'B+' THEN 3.5
+             WHEN final_grade = 'B' THEN 3.0
+             WHEN final_grade = 'C+' THEN 2.5
+             WHEN final_grade = 'C' THEN 2.0
+             ELSE 0 END) as average_grade
+FROM project_archive
+GROUP BY academic_year
+ORDER BY academic_year DESC;
+```
+
+### 5. Get technology statistics
+```sql
+-- Get technology statistics
+SELECT 
+    unnest(technology_used) as technology,
+    COUNT(*) as usage_count
+FROM project_archive
+GROUP BY unnest(technology_used)
+ORDER BY usage_count DESC;
+```
+
+---
+
+## 📋 สรุป Database Schema
+
+### **✅ Tables:**
+1. **users** - ข้อมูลผู้ใช้
+2. **projects** - ข้อมูลโปรเจค
+3. **project_students** - ความสัมพันธ์ระหว่างโปรเจคและนักศึกษา
+4. **project_archive** - คลังโปรเจคที่สำเร็จแล้ว
+5. **appointments** - การนัดหมาย
+6. **comments** - ความคิดเห็น
+7. **notifications** - การแจ้งเตือน
+8. **search_history** - ประวัติการค้นหา
+
+### **🔧 Functions:**
+1. **update_updated_at_column()** - อัปเดต timestamp
+2. **archive_completed_project()** - จัดเก็บโปรเจคที่สำเร็จแล้ว
+3. **search_archived_projects()** - ค้นหาโปรเจคในคลัง
+
+### **📊 Features:**
+- Full-text search support
+- Indexes for performance
+- Triggers for automation
+- Sample data for testing
+
+**Database Schema นี้จะรองรับระบบจัดเก็บโปรเจคที่สำเร็จแล้วได้อย่างมีประสิทธิภาพครับ!** 🎯
+

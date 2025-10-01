@@ -10,7 +10,7 @@ import type {
   ApiResponse 
 } from '../types/index.js';
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -163,7 +163,7 @@ export const appointmentAPI = {
   },
 
   updateAppointmentStatus: async (appointmentId: string, status: string): Promise<Appointment> => {
-    const response = await api.put<ApiResponse<Appointment>>(`/appointments/${appointmentId}/status`, { status });
+    const response = await api.put<ApiResponse<Appointment>>(`/appointments/${appointmentId}/status/${status}`);
     return response.data.data!;
   },
 };
