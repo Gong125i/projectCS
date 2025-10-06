@@ -12,7 +12,8 @@ import {
   FolderOpen,
   Eye,
   Search,
-  Filter
+  Filter,
+  X as XIcon
 } from 'lucide-react';
 
 const Projects: React.FC = () => {
@@ -24,6 +25,7 @@ const Projects: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -32,6 +34,7 @@ const Projects: React.FC = () => {
   const [inviteStudentId, setInviteStudentId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -132,14 +135,21 @@ const Projects: React.FC = () => {
     }
   };
 
-  const handleDeleteProject = async (projectId: string) => {
-    if (window.confirm('คุณแน่ใจหรือไม่ที่จะลบโครงงานนี้?')) {
-      try {
-        await projectAPI.deleteProject(projectId);
-        fetchData();
-      } catch (error) {
-        console.error('Failed to delete project:', error);
-      }
+  const handleDeleteProject = async () => {
+    if (!selectedProject) return;
+    
+    setDeleting(true);
+    try {
+      await projectAPI.deleteProject(selectedProject.id);
+      alert('ลบโครงงานเรียบร้อยแล้ว!');
+      setShowDeleteModal(false);
+      setSelectedProject(null);
+      fetchData();
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+      alert('เกิดข้อผิดพลาดในการลบโครงงาน');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -272,7 +282,10 @@ const Projects: React.FC = () => {
                     <Edit className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => handleDeleteProject(project.id)}
+                    onClick={() => {
+                      setSelectedProject(project);
+                      setShowDeleteModal(true);
+                    }}
                     className="text-red-600 hover:text-red-800"
                     title="ลบโครงงาน"
                   >
@@ -518,6 +531,66 @@ const Projects: React.FC = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Modal */}
+      {showDeleteModal && selectedProject && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                  <Trash2 className="h-5 w-5 mr-2 text-red-600" />
+                  ยืนยันการลบโครงงาน
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedProject(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XIcon className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-gray-700 text-center">
+                  คุณต้องการลบโครงงาน <strong>"{selectedProject.name}"</strong> หรือไม่?
+                </p>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleDeleteProject}
+                  disabled={deleting}
+                  className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      กำลังลบ...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      ยืนยันลบ
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedProject(null);
+                  }}
+                  className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  ยกเลิก
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -505,47 +505,6 @@ const Statistics: React.FC = () => {
           </table>
         </div>
       </div>
-
-      {/* Performance Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-gradient-to-r from-green-500 to-emerald-600 overflow-hidden shadow-lg rounded-lg">
-          <div className="p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <TrendingUp className="h-10 w-10 text-white" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-green-100 truncate">อัตราการมาตามนัด</dt>
-                  <dd className="text-4xl font-bold text-white">{attendanceRate}%</dd>
-                  <dd className="text-xs text-green-100 mt-1">
-                    จาก {overallStats.completedAppointments + overallStats.failedAppointments} นัดที่เกิดขึ้น
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 overflow-hidden shadow-lg rounded-lg">
-          <div className="p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <BarChart3 className="h-10 w-10 text-white" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-blue-100 truncate">อัตราความสำเร็จ</dt>
-                  <dd className="text-4xl font-bold text-white">{successRate}%</dd>
-                  <dd className="text-xs text-blue-100 mt-1">
-                    {overallStats.completedAppointments} / {overallStats.totalAppointments} นัดหมาย
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

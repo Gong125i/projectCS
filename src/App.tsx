@@ -53,9 +53,9 @@ const HomeRedirect: React.FC = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // นักศึกษาไปหน้า Appointments, อาจารย์ไปหน้า Dashboard
+  // นักศึกษาไปหน้า Projects, อาจารย์ไปหน้า Dashboard
   if (user.role === 'student') {
-    return <Navigate to="/appointments" replace />;
+    return <Navigate to="/projects" replace />;
   } else {
     return <Navigate to="/dashboard" replace />;
   }

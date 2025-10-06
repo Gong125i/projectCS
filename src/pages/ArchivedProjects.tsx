@@ -4,10 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { projectAPI } from '../services/api';
 import type { Project } from '../types/index.js';
 import { 
-  Archive,
-  FolderOpen,
   Eye,
-  Users,
   Search,
   Filter
 } from 'lucide-react';
@@ -24,8 +21,19 @@ const ArchivedProjects: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState('');
 
   useEffect(() => {
+    // ตรวจสอบสิทธิ์การเข้าถึง - เฉพาะอาจารย์เท่านั้น
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    
+    if (user.role !== 'advisor') {
+      navigate('/projects');
+      return;
+    }
+    
     fetchArchivedProjects();
-  }, []);
+  }, [user, navigate]);
 
   useEffect(() => {
     filterProjects();
@@ -149,7 +157,6 @@ const ArchivedProjects: React.FC = () => {
           <div key={`project-${project.id}-${index}`} className="bg-white rounded-lg shadow-md p-6 border border-green-200">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center">
-                <Archive className="h-6 w-6 text-green-600 mr-2" />
                 <h3 className="text-lg font-medium text-gray-900">{project.name}</h3>
               </div>
             </div>

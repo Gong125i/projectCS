@@ -1235,15 +1235,24 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
     }
 
     // Check if user can comment on this appointment
-    const appointmentCheck = await pool.query(
-      'SELECT id FROM appointments WHERE id = $1 AND (student_id = $2 OR advisor_id = $2)',
-      [id, req.user.id]
-    );
+    // Allow project members (advisor or students in the project) to comment
+    const appointmentCheck = await pool.query(`
+      SELECT a.id 
+      FROM appointments a
+      LEFT JOIN projects p ON a.project_id = p.id
+      LEFT JOIN project_students ps ON p.id = ps.project_id
+      WHERE a.id = $1 AND (
+        a.student_id = $2 OR 
+        a.advisor_id = $2 OR 
+        (p.advisor_id = $2) OR 
+        (ps.student_id = $2)
+      )
+    `, [id, req.user.id]);
 
     if (appointmentCheck.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'ไม่พบนัดหมายนี้'
+        message: 'ไม่พบนัดหมายนี้หรือไม่มีสิทธิ์เพิ่มความคิดเห็น'
       });
     }
 

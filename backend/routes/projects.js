@@ -7,6 +7,14 @@ const router = express.Router();
 // Get archived projects (filtered by user role)
 router.get('/archived', authenticateToken, async (req, res) => {
   try {
+    // ตรวจสอบสิทธิ์การเข้าถึง - เฉพาะอาจารย์เท่านั้น
+    if (req.user.role !== 'advisor') {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงโครงงานที่จัดเก็บได้'
+      });
+    }
+
     let query, params;
 
     if (req.user.role === 'advisor') {

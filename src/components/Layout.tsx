@@ -37,8 +37,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     ...(user?.role === 'advisor' ? [
       { name: 'แดชบอร์ด', href: '/dashboard', icon: GraduationCap },
     ] : []),
-    { name: 'นัดหมาย', href: '/appointments', icon: Calendar },
     { name: 'โครงงาน', href: '/projects', icon: FolderOpen },
+    { name: 'นัดหมาย', href: '/appointments', icon: Calendar },
     ...(user?.role === 'advisor' ? [
       { name: 'สถิติภาพรวม', href: '/statistics', icon: BarChart3 },
       { name: 'ผู้ใช้', href: '/users', icon: Users },
@@ -81,20 +81,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </Link>
               ))}
             </div>
-            <div className="border-t border-gray-200 pt-2">
-              <Link
-                to="/archived-projects"
-                onClick={() => setSidebarOpen(false)}
-                className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
-                  isActive('/archived-projects')
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`}
-              >
-                <Archive className="mr-3 h-5 w-5" />
-                โครงงานที่จัดเก็บ
-              </Link>
-            </div>
+            {user?.role === 'advisor' && (
+              <div className="border-t border-gray-200 pt-2">
+                <Link
+                  to="/archived-projects"
+                  onClick={() => setSidebarOpen(false)}
+                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                    isActive('/archived-projects')
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  <Archive className="mr-3 h-5 w-5" />
+                  โครงงานที่จัดเก็บ
+                </Link>
+              </div>
+            )}
           </nav>
         </div>
       </div>
@@ -122,19 +124,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </Link>
               ))}
             </div>
-            <div className="border-t border-gray-200 pt-2 mt-2">
-              <Link
-                to="/archived-projects"
-                className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
-                  isActive('/archived-projects')
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`}
-              >
-                <Archive className="mr-3 h-5 w-5" />
-                โครงงานที่จัดเก็บ
-              </Link>
-            </div>
+            {user?.role === 'advisor' && (
+              <div className="border-t border-gray-200 pt-2 mt-2">
+                <Link
+                  to="/archived-projects"
+                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                    isActive('/archived-projects')
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  <Archive className="mr-3 h-5 w-5" />
+                  โครงงานที่จัดเก็บ
+                </Link>
+              </div>
+            )}
           </nav>
         </div>
       </div>

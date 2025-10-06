@@ -78,6 +78,7 @@ const Users: React.FC = () => {
   const studentCount = users.filter(u => u.role === 'student').length;
   const advisorCount = users.filter(u => u.role === 'advisor').length;
 
+
   if (user?.role !== 'advisor') {
     return (
       <div className="max-w-4xl mx-auto">
@@ -237,26 +238,11 @@ const Users: React.FC = () => {
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    รูปแบบ: firstName,lastName,studentId,phone,email,role
+                    รูปแบบ: firstName,lastName,studentId,phone,email,role,password,major
                   </p>
                 </div>
                 
-                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-                  <div className="flex">
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-yellow-800">
-                        หมายเหตุ
-                      </h3>
-                      <div className="mt-2 text-sm text-yellow-700">
-                        <ul className="list-disc pl-5 space-y-1">
-                          <li>role ต้องเป็น 'student' หรือ 'advisor'</li>
-                          <li>studentId และ email เป็น optional</li>
-                          <li>phone เป็น required สำหรับทุกคน</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+
 
                 <div className="flex justify-end space-x-3">
                   <button

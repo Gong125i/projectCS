@@ -19,7 +19,8 @@ import {
   Save,
   X as XIcon,
   BarChart3,
-  Archive
+  Archive,
+  Eye
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -34,15 +35,13 @@ const ProjectDetail: React.FC = () => {
   const [editingNotes, setEditingNotes] = useState<string | null>(null);
   const [notesText, setNotesText] = useState('');
   const [showArchiveModal, setShowArchiveModal] = useState(false);
-  const [archiveData, setArchiveData] = useState({
-    finalGrade: '',
-    projectType: '',
-    technologyUsed: '',
-    keywords: ''
-  });
   const [archiving, setArchiving] = useState(false);
   const [sortBy, setSortBy] = useState<'status' | 'date'>('status');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [showAppointmentDetail, setShowAppointmentDetail] = useState(false);
+  const [selectedAppointmentDetail, setSelectedAppointmentDetail] = useState<Appointment | null>(null);
+  const [newComment, setNewComment] = useState('');
+  const [addingComment, setAddingComment] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -69,15 +68,8 @@ const ProjectDetail: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     const badges: { [key: string]: { bg: string; text: string; label: string } } = {
-      pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'รอยืนยัน' },
-      confirmed: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'ยืนยันแล้ว' },
-      completed: { bg: 'bg-green-100', text: 'text-green-800', label: 'เสร็จสิ้น' },
-      failed: { bg: 'bg-red-100', text: 'text-red-800', label: 'ไม่มาตามนัด' },
-      rejected: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'ปฏิเสธ' },
-      cancelled: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'ยกเลิก' },
-      pending_student_confirmation: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'รอนักศึกษายืนยัน' },
-      pending_advisor_confirmation: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'รออาจารย์ยืนยัน' },
-      no_response: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'ไม่ตอบรับ' }
+      completed: { bg: 'bg-green-100', text: 'text-green-800', label: 'มาตามนัด' },
+      failed: { bg: 'bg-red-100', text: 'text-red-800', label: 'ไม่มาตามนัด' }
     };
 
     const badge = badges[status] || { bg: 'bg-gray-100', text: 'text-gray-800', label: status };
@@ -110,6 +102,63 @@ const ProjectDetail: React.FC = () => {
     setNotesText('');
   };
 
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !selectedAppointmentDetail || addingComment || !project || !user) return;
+
+    // Check if user is a member of the project
+    const isProjectMember = user.role === 'advisor' 
+      ? project.advisorId === user.id 
+      : project.students.some(student => student.id === user.id);
+
+    if (!isProjectMember) {
+      alert('เฉพาะสมาชิกในโปรเจคเท่านั้นที่สามารถเพิ่มความคิดเห็นได้');
+      return;
+    }
+
+    setAddingComment(true);
+    try {
+      // Call API to add comment using the existing API service
+      const response = await fetch(`http://localhost:3001/api/appointments/${selectedAppointmentDetail.id}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          content: newComment.trim()
+        })
+      });
+
+      if (response.ok) {
+        // Refresh appointment data
+        await fetchData();
+        setNewComment('');
+        
+        // Update selected appointment detail
+        const updatedAppointments = await appointmentAPI.getProjectAppointments(id!);
+        const updatedAppointment = updatedAppointments.find(a => a.id === selectedAppointmentDetail.id);
+        if (updatedAppointment) {
+          setSelectedAppointmentDetail(updatedAppointment);
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('Error adding comment:', errorData);
+        alert('เกิดข้อผิดพลาดในการเพิ่มความคิดเห็น: ' + (errorData.message || 'ไม่ทราบสาเหตุ'));
+      }
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      alert('เกิดข้อผิดพลาดในการเพิ่มความคิดเห็น');
+    } finally {
+      setAddingComment(false);
+    }
+  };
+
+  const handleCloseAppointmentDetail = () => {
+    setShowAppointmentDetail(false);
+    setSelectedAppointmentDetail(null);
+    setNewComment('');
+  };
+
   const handleArchiveProject = async () => {
     if (!project) {
       alert('ไม่พบข้อมูลโปรเจค');
@@ -137,12 +186,11 @@ const ProjectDetail: React.FC = () => {
           status: apt.status,
           notes: apt.notes
         })),
-        finalGrade: archiveData.finalGrade || 'A',
-        projectType: archiveData.projectType || 'Web Application',
-        technologyUsed: archiveData.technologyUsed ? archiveData.technologyUsed.split(',').map(tech => tech.trim()) : ['React', 'Node.js', 'PostgreSQL'],
-        keywords: archiveData.keywords ? archiveData.keywords.split(',').map(keyword => keyword.trim()) : ['การนัดหมาย', 'ระบบจัดการ']
+        projectType: 'Web Application'
       };
 
+      console.log('Archive payload:', archivePayload);
+      
       const response = await fetch('http://localhost:3001/api/project-archive/archive', {
         method: 'POST',
         headers: {
@@ -152,20 +200,18 @@ const ProjectDetail: React.FC = () => {
         body: JSON.stringify(archivePayload)
       });
 
+      console.log('Archive response status:', response.status);
+
       if (response.ok) {
-        await response.json();
+        const result = await response.json();
+        console.log('Archive success:', result);
         alert('จัดเก็บโปรเจคเรียบร้อยแล้ว!');
         setShowArchiveModal(false);
-        setArchiveData({
-          finalGrade: '',
-          projectType: '',
-          technologyUsed: '',
-          keywords: ''
-        });
         fetchData();
       } else {
-        const error = await response.json();
-        alert(`เกิดข้อผิดพลาด: ${error.message}`);
+        const error = await response.json().catch(() => ({ message: 'Unknown error' }));
+        console.error('Archive error:', error);
+        alert(`เกิดข้อผิดพลาด: ${error.message || 'ไม่สามารถจัดเก็บโปรเจคได้'}`);
       }
     } catch (error) {
       console.error('Error archiving project:', error);
@@ -262,14 +308,14 @@ const ProjectDetail: React.FC = () => {
           </div>
           <div className="flex items-center justify-center bg-green-50 px-4 py-2 rounded-lg">
             <div className="text-center">
-              <p className="text-xs text-green-600">เสร็จสิ้นแล้ว</p>
+              <p className="text-xs text-green-600">มาตามนัด</p>
               <p className="text-xl font-bold text-green-900">{stats.completedAppointments}</p>
             </div>
           </div>
-          <div className="flex items-center justify-center bg-purple-50 px-4 py-2 rounded-lg">
+          <div className="flex items-center justify-center bg-red-50 px-4 py-2 rounded-lg">
             <div className="text-center">
-              <p className="text-xs text-purple-600">อัตราความสำเร็จ</p>
-              <p className="text-xl font-bold text-purple-900">{stats.successRate}%</p>
+              <p className="text-xs text-red-600">ไม่มาตามนัด</p>
+              <p className="text-xl font-bold text-red-900">{stats.failedAppointments}</p>
             </div>
           </div>
         </div>
@@ -355,7 +401,7 @@ const ProjectDetail: React.FC = () => {
                   className="px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">ทั้งหมด</option>
-                  <option value="completed">เสร็จสิ้น</option>
+                  <option value="completed">มาตามนัด</option>
                   <option value="failed">ไม่มาตามนัด</option>
                 </select>
               </div>
@@ -396,6 +442,9 @@ const ProjectDetail: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">
                     หัวข้อการนัดหมาย
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                    การจัดการ
+                  </th>
                   {user?.role === 'advisor' && (
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       หมายเหตุ
@@ -411,17 +460,10 @@ const ProjectDetail: React.FC = () => {
                   })
                   .sort((a, b) => {
                     if (sortBy === 'status') {
-                      // Sort by status first (completed -> confirmed -> pending -> others)
+                      // Sort by status first (completed -> failed)
                       const statusOrder: { [key: string]: number } = {
                         completed: 1,
-                        confirmed: 2,
-                        pending: 3,
-                        pending_student_confirmation: 4,
-                        pending_advisor_confirmation: 5,
-                        rejected: 6,
-                        failed: 7,
-                        cancelled: 8,
-                        no_response: 9
+                        failed: 2
                       };
                       const statusDiff = (statusOrder[a.status] || 10) - (statusOrder[b.status] || 10);
                       if (statusDiff !== 0) return statusDiff;
@@ -460,6 +502,19 @@ const ProjectDetail: React.FC = () => {
                           <div className="font-medium">{appointment.title || '-'}</div>
                         </div>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={() => {
+                            setSelectedAppointmentDetail(appointment);
+                            setShowAppointmentDetail(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-900 flex items-center space-x-1"
+                          title="ดูรายละเอียด"
+                        >
+                          <Eye className="h-4 w-4" />
+                          <span>ดู</span>
+                        </button>
+                      </td>
                       {user?.role === 'advisor' && (
                         <td className="px-6 py-4">
                           {editingNotes === appointment.id ? (
@@ -480,7 +535,7 @@ const ProjectDetail: React.FC = () => {
                               <button
                                 onClick={handleCancelEdit}
                                 className="p-1 text-gray-600 hover:text-gray-800"
-                                title="ยกเลิก"
+                                title="ไม่มาตามนัด"
                               >
                                 <XIcon className="h-4 w-4" />
                               </button>
@@ -530,58 +585,12 @@ const ProjectDetail: React.FC = () => {
               </div>
 
               <div className="mb-6">
-                <p className="text-gray-700 mb-4">
+                <p className="text-gray-700 text-center">
                   คุณต้องการจัดเก็บโปรเจค <strong>"{project?.name}"</strong> หรือไม่?
                 </p>
-
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                  <h4 className="font-semibold text-blue-800 mb-2">ข้อมูลที่จะจัดเก็บ:</h4>
-                  <div className="text-sm text-blue-700 space-y-1">
-                    <p><strong>การนัดหมายทั้งหมด:</strong> {stats.totalAppointments} ครั้ง</p>
-                    <p><strong>การนัดหมายที่เสร็จสิ้น:</strong> {stats.completedAppointments} ครั้ง</p>
-                    <p><strong>อัตราความสำเร็จ:</strong> {stats.successRate}%</p>
-                  </div>
-                </div>
-
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-green-800 mb-2">ข้อมูลเพิ่มเติม (ไม่บังคับ):</h4>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-green-700 mb-1">
-                        เกรดสุดท้าย
-                      </label>
-                      <select
-                        value={archiveData.finalGrade}
-                        onChange={(e) => setArchiveData({ ...archiveData, finalGrade: e.target.value })}
-                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                      >
-                        <option value="">เลือกเกรด</option>
-                        <option value="A">A</option>
-                        <option value="B+">B+</option>
-                        <option value="B">B</option>
-                        <option value="C+">C+</option>
-                        <option value="C">C</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-green-700 mb-1">
-                        ประเภทโปรเจค
-                      </label>
-                      <select
-                        value={archiveData.projectType}
-                        onChange={(e) => setArchiveData({ ...archiveData, projectType: e.target.value })}
-                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                      >
-                        <option value="">เลือกประเภท</option>
-                        <option value="Web Application">Web Application</option>
-                        <option value="Mobile Application">Mobile Application</option>
-                        <option value="Desktop Application">Desktop Application</option>
-                        <option value="Research Project">Research Project</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
+                <p className="text-sm text-gray-500 text-center mt-2">
+                  โปรเจคจะถูกย้ายไปยังหน้ารายการโปรเจคที่จัดเก็บแล้ว
+                </p>
               </div>
 
               <div className="flex space-x-3">
@@ -609,6 +618,120 @@ const ProjectDetail: React.FC = () => {
                   ยกเลิก
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Appointment Detail Modal */}
+      {showAppointmentDetail && selectedAppointmentDetail && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-4 mx-auto p-4 w-full max-w-lg shadow-lg rounded-md bg-white border border-gray-200">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">รายละเอียดการนัดหมาย</h3>
+              <button
+                onClick={handleCloseAppointmentDetail}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="space-y-4">
+              {/* Title & Status */}
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium text-gray-900">{selectedAppointmentDetail.title || '-'}</h4>
+                {getStatusBadge(selectedAppointmentDetail.status)}
+              </div>
+
+              {/* Date, Time & Location */}
+              <div className="text-sm text-gray-600 space-y-1">
+                <div className="flex items-center">
+                  <Calendar className="h-4 w-4 mr-2 text-blue-500" />
+                  {format(new Date(selectedAppointmentDetail.date), 'dd MMM yyyy', { locale: th })} {selectedAppointmentDetail.time}
+                </div>
+                <div className="flex items-center">
+                  <MapPin className="h-4 w-4 mr-2 text-blue-500" />
+                  {selectedAppointmentDetail.location}
+                </div>
+              </div>
+
+              {/* Notes */}
+              {selectedAppointmentDetail.notes && (
+                <div className="text-sm">
+                  <span className="font-medium text-gray-700">หมายเหตุ: </span>
+                  <span className="text-gray-600">{selectedAppointmentDetail.notes}</span>
+                </div>
+              )}
+
+
+              {/* Comments Section */}
+              <div className="border-t border-gray-200 pt-4">
+                <h5 className="text-sm font-medium text-gray-900 mb-3">ความคิดเห็น</h5>
+                
+                {/* Add Comment Form */}
+                {project && user && (() => {
+                  const isProjectMember = user.role === 'advisor' 
+                    ? project.advisorId === user.id 
+                    : project.students.some(student => student.id === user.id);
+                  
+                  return isProjectMember ? (
+                    <div className="mb-4">
+                      <textarea
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder="พิมพ์ความคิดเห็น..."
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                        rows={2}
+                      />
+                      <div className="flex justify-end mt-2">
+                        <button
+                          onClick={handleAddComment}
+                          disabled={!newComment.trim() || addingComment}
+                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {addingComment ? 'กำลังเพิ่ม...' : 'เพิ่ม'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 text-center py-2">เฉพาะสมาชิกในโปรเจคเท่านั้น</p>
+                  );
+                })()}
+
+                {/* Comments List */}
+                {selectedAppointmentDetail.comments && selectedAppointmentDetail.comments.length > 0 ? (
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {selectedAppointmentDetail.comments.map((comment, index) => (
+                      <div key={index} className="bg-gray-50 p-2 rounded text-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium text-gray-900">
+                            {comment.user?.firstName} {comment.user?.lastName}
+                          </span>
+                          <span className="text-gray-500">
+                            {format(new Date(comment.createdAt), 'dd/MM HH:mm', { locale: th })}
+                          </span>
+                        </div>
+                        <div className="text-gray-700">{comment.content}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500 text-center py-2">ยังไม่มีความคิดเห็น</p>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end mt-4 pt-3 border-t border-gray-200">
+              <button
+                onClick={handleCloseAppointmentDetail}
+                className="px-4 py-1 text-sm text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+              >
+                ปิด
+              </button>
             </div>
           </div>
         </div>

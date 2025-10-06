@@ -30,10 +30,10 @@ const Login: React.FC = () => {
     }
 
     try {
-      const userData = await login({ user, password });
-      // นักศึกษาไปหน้า Appointments, อาจารย์ไปหน้า Dashboard
+      const userData: any = await login({ user, password });
+      // นักศึกษาไปหน้า Projects, อาจารย์ไปหน้า Dashboard
       if (userData?.role === 'student') {
-        navigate('/appointments');
+        navigate('/projects');
       } else {
         navigate('/dashboard');
       }

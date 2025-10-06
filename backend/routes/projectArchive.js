@@ -16,10 +16,7 @@ router.post('/archive', authenticateToken, async (req, res) => {
       successRate,
       attendanceRate,
       appointmentDetails,
-      finalGrade, 
-      projectType, 
-      technologyUsed, 
-      keywords 
+      projectType
     } = req.body;
     const userId = req.user.id;
 
@@ -66,26 +63,22 @@ router.post('/archive', authenticateToken, async (req, res) => {
       INSERT INTO project_archive (
         project_id, project_name, description, advisor_name,
         student_names, academic_year, semester, completion_date,
-        final_grade, project_type, technology_used, keywords,
-        total_appointments, completed_appointments, success_rate, attendance_rate,
+        project_type, total_appointments, completed_appointments, success_rate, attendance_rate,
         appointment_details
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *
     `;
 
     const archiveValues = [
       projectId,
       projectName || project.name,
-      project.description || '',
+      '', // description - ไม่มีในตาราง projects
       advisorName || `${project.first_name} ${project.last_name}`,
-      studentNames || dbStudentNames,
-      '2567', // default academic year
-      '1',    // default semester
+      Array.isArray(studentNames) ? studentNames : dbStudentNames,
+      project.academic_year || '2567',
+      project.semester || '1',
       new Date(),
-      finalGrade || 'A',
       projectType || 'Web Application',
-      technologyUsed || ['React', 'Node.js', 'PostgreSQL'],
-      keywords || ['การนัดหมาย', 'ระบบจัดการ'],
       totalAppointments || 0,
       completedAppointments || 0,
       successRate || '0.0',
@@ -93,8 +86,13 @@ router.post('/archive', authenticateToken, async (req, res) => {
       JSON.stringify(appointmentDetails || [])
     ];
 
+    console.log('Archive query:', archiveQuery);
+    console.log('Archive values:', archiveValues);
+    
     const archiveResult = await pool.query(archiveQuery, archiveValues);
     const archivedProject = archiveResult.rows[0];
+
+    console.log('Archive result:', archivedProject);
 
     // Update project archived status
     await pool.query(
@@ -119,6 +117,14 @@ router.post('/archive', authenticateToken, async (req, res) => {
 // Get archived projects
 router.get('/', authenticateToken, async (req, res) => {
   try {
+    // ตรวจสอบสิทธิ์การเข้าถึง - เฉพาะอาจารย์เท่านั้น
+    if (req.user.role !== 'advisor') {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงโครงงานที่จัดเก็บได้'
+      });
+    }
+
     const { page = 1, limit = 10, sort = 'completion_date', order = 'desc' } = req.query;
     const offset = (page - 1) * limit;
 
@@ -160,6 +166,14 @@ router.get('/', authenticateToken, async (req, res) => {
 // Search archived projects
 router.get('/search', authenticateToken, async (req, res) => {
   try {
+    // ตรวจสอบสิทธิ์การเข้าถึง - เฉพาะอาจารย์เท่านั้น
+    if (req.user.role !== 'advisor') {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงโครงงานที่จัดเก็บได้'
+      });
+    }
+
     const { 
       query = '', 
       academic_year = '', 
@@ -272,6 +286,13 @@ router.get('/search', authenticateToken, async (req, res) => {
 // Get project statistics
 router.get('/statistics', authenticateToken, async (req, res) => {
   try {
+    // ตรวจสอบสิทธิ์การเข้าถึง - เฉพาะอาจารย์เท่านั้น
+    if (req.user.role !== 'advisor') {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'เฉพาะอาจารย์เท่านั้นที่สามารถเข้าถึงโครงงานที่จัดเก็บได้'
+      });
+    }
     const statsQuery = `
       SELECT 
         COUNT(*) as total_projects,
