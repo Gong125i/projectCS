@@ -393,8 +393,8 @@ const Dashboard: React.FC = () => {
                       </>
                     )}
                     
-                    {/* ปุ่มแก้ไข - แสดงเสมอยกเว้นสถานะรอยืนยัน */}
-                    {appointment.status !== 'pending_student_confirmation' && appointment.status !== 'pending_advisor_confirmation' && (
+                    {/* ปุ่มแก้ไข - ซ่อนเมื่ออยู่ในสถานะ pending หรือรอยืนยัน */}
+                    {!['pending', 'pending_student_confirmation', 'pending_advisor_confirmation'].includes(appointment.status) && (
                       <button
                         onClick={() => {
                           setSelectedAppointment(appointment);
@@ -484,25 +484,6 @@ const Dashboard: React.FC = () => {
                             </button>
                           </>
                         )}
-                        
-                        {/* ปุ่มแก้ไข */}
-                        <button
-                          onClick={() => {
-                            setSelectedAppointment(appointment);
-                            setFormData({
-                              title: appointment.title || '',
-                              date: format(parseISO(appointment.date), 'yyyy-MM-dd'),
-                              time: appointment.time,
-                              location: appointment.location,
-                              notes: appointment.notes || '',
-                              projectId: appointment.projectId || ''
-                            });
-                            setShowEditModal(true);
-                          }}
-                          className="px-3 py-1 text-xs text-blue-600 bg-white border border-blue-600 hover:bg-blue-50 rounded"
-                        >
-                          แก้ไข
-                        </button>
                       </div>
                     </div>
                   </div>

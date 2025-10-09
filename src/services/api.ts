@@ -102,6 +102,7 @@ export const projectAPI = {
 // Appointment API
 export const appointmentAPI = {
   createAppointment: async (data: {
+    title: string;
     date: string;
     time: string;
     location: string;

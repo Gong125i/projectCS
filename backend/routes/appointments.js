@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
+const emailService = require('../services/emailService');
 
 const router = express.Router();
 
@@ -417,7 +418,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const appointment = result.rows[0];
 
-    // Create notifications
+    // Create notifications and send emails in background
     if (req.user.role === 'student') {
       // Student-initiated appointment - notify advisor
       await pool.query(
@@ -426,21 +427,44 @@ router.post('/', authenticateToken, async (req, res) => {
         [finalAdvisorId, 'appointment_request', 'คำขอการนัดหมายใหม่',
          `นักศึกษา ${req.user.first_name} ${req.user.last_name} ส่งคำขอการนัดหมาย`, appointment.id]
       );
+
+      // Send email to advisor (non-blocking)
+      pool.query('SELECT * FROM users WHERE id = $1', [finalAdvisorId])
+        .then(advisorResult => {
+          if (advisorResult.rows.length > 0) {
+            const advisor = advisorResult.rows[0];
+            emailService.sendAppointmentCreatedEmail(appointment, advisor)
+              .catch(err => console.error('Email send error:', err));
+          }
+        })
+        .catch(err => console.error('Query error:', err));
     } else {
       // Advisor-initiated project appointment - notify all students in project
+      // Use JOIN to get students with their data in one query
       const studentsResult = await pool.query(
-        'SELECT student_id FROM project_students WHERE project_id = $1',
+        `SELECT u.* FROM users u
+         INNER JOIN project_students ps ON u.id = ps.student_id
+         WHERE ps.project_id = $1`,
         [projectId]
       );
 
-      for (const student of studentsResult.rows) {
-        await pool.query(
+      // Insert all notifications at once
+      const notificationPromises = studentsResult.rows.map(student =>
+        pool.query(
           `INSERT INTO notifications (user_id, type, title, message, appointment_id, created_at)
            VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-          [student.student_id, 'appointment_request', 'นัดหมายใหม่จากอาจารย์ที่ปรึกษา',
+          [student.id, 'appointment_request', 'นัดหมายใหม่จากอาจารย์ที่ปรึกษา',
            `อาจารย์ ${req.user.first_name} ${req.user.last_name} สร้างนัดหมายใหม่สำหรับโปรเจค`, appointment.id]
-        );
-      }
+        )
+      );
+      
+      await Promise.all(notificationPromises);
+
+      // Send emails in background (non-blocking)
+      studentsResult.rows.forEach(student => {
+        emailService.sendAppointmentCreatedEmail(appointment, student)
+          .catch(err => console.error('Email send error:', err));
+      });
     }
 
     res.status(201).json({
@@ -534,7 +558,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     const updatedAppointment = result.rows[0];
 
-    // Send notification to students if advisor edited the appointment
+    // Send notification and email to students if advisor edited the appointment
     if (newStatus === 'pending_student_confirmation') {
       // If appointment has student_id, notify that student
       if (appointment.student_id) {
@@ -549,30 +573,51 @@ router.put('/:id', authenticateToken, async (req, res) => {
             id
           ]
         );
+
+        // Send email to student (non-blocking)
+        pool.query('SELECT * FROM users WHERE id = $1', [appointment.student_id])
+          .then(studentResult => {
+            if (studentResult.rows.length > 0) {
+              emailService.sendAppointmentUpdatedEmail(updatedAppointment, studentResult.rows[0])
+                .catch(err => console.error('Email send error:', err));
+            }
+          })
+          .catch(err => console.error('Query error:', err));
       } else if (appointment.project_id) {
         // If appointment is project-based, notify all students in the project
         const studentsResult = await pool.query(
-          'SELECT student_id FROM project_students WHERE project_id = $1',
+          `SELECT u.* FROM users u
+           INNER JOIN project_students ps ON u.id = ps.student_id
+           WHERE ps.project_id = $1`,
           [appointment.project_id]
         );
         
-        for (const studentRow of studentsResult.rows) {
-          await pool.query(
+        // Insert all notifications at once
+        const notificationPromises = studentsResult.rows.map(student =>
+          pool.query(
             `INSERT INTO notifications (user_id, type, title, message, related_id)
              VALUES ($1, $2, $3, $4, $5)`,
             [
-              studentRow.student_id,
+              student.id,
               'appointment',
               'อาจารย์แก้ไขนัดหมาย',
               `อาจารย์ได้แก้ไขนัดหมายของโปรเจค กรุณายืนยันการเปลี่ยนแปลง`,
               id
             ]
-          );
-        }
+          )
+        );
+        
+        await Promise.all(notificationPromises);
+
+        // Send emails in background (non-blocking)
+        studentsResult.rows.forEach(student => {
+          emailService.sendAppointmentUpdatedEmail(updatedAppointment, student)
+            .catch(err => console.error('Email send error:', err));
+        });
       }
     }
     
-    // Send notification to advisor if student edited the appointment
+    // Send notification and email to advisor if student edited the appointment
     if (newStatus === 'pending_advisor_confirmation' && appointment.advisor_id) {
       await pool.query(
         `INSERT INTO notifications (user_id, type, title, message, related_id)
@@ -585,6 +630,16 @@ router.put('/:id', authenticateToken, async (req, res) => {
           id
         ]
       );
+
+      // Send email to advisor (non-blocking)
+      pool.query('SELECT * FROM users WHERE id = $1', [appointment.advisor_id])
+        .then(advisorResult => {
+          if (advisorResult.rows.length > 0) {
+            emailService.sendAppointmentUpdatedEmail(updatedAppointment, advisorResult.rows[0])
+              .catch(err => console.error('Email send error:', err));
+          }
+        })
+        .catch(err => console.error('Query error:', err));
     }
 
     res.json({
@@ -649,19 +704,40 @@ router.put('/:id/advisor-confirm-changes', authenticateToken, async (req, res) =
 
     const updatedAppointment = result.rows[0];
 
-    // Send notification to student
+    // Send notification to student(s)
     if (appointment.student_id) {
+      // Specific student appointment
       await pool.query(
         `INSERT INTO notifications (user_id, type, title, message, related_id)
          VALUES ($1, $2, $3, $4, $5)`,
         [
           appointment.student_id,
-          'appointment',
+          'appointment_change_confirmed',
           'อาจารย์ยืนยันการเปลี่ยนแปลง',
           `อาจารย์ยืนยันการเปลี่ยนแปลงนัดหมายแล้ว`,
           id
         ]
       );
+    } else if (appointment.project_id) {
+      // Project appointment - notify all students in project
+      const studentsResult = await pool.query(
+        'SELECT student_id FROM project_students WHERE project_id = $1',
+        [appointment.project_id]
+      );
+
+      for (const student of studentsResult.rows) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, title, message, related_id)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            student.student_id,
+            'appointment_change_confirmed',
+            'อาจารย์ยืนยันการเปลี่ยนแปลง',
+            `อาจารย์ยืนยันการเปลี่ยนแปลงนัดหมายแล้ว`,
+            id
+          ]
+        );
+      }
     }
 
     res.json({
@@ -731,7 +807,7 @@ router.put('/:id/confirm-changes', authenticateToken, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5)`,
       [
         appointment.advisor_id,
-        'appointment',
+        'appointment_change_confirmed',
         'นักศึกษายืนยันการเปลี่ยนแปลง',
         `นักศึกษายืนยันการเปลี่ยนแปลงนัดหมายแล้ว`,
         id
@@ -759,6 +835,177 @@ router.put('/:id/confirm-changes', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'เกิดข้อผิดพลาดในการยืนยันการเปลี่ยนแปลง'
+    });
+  }
+});
+
+// Student rejects advisor's changes
+router.put('/:id/reject-changes', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if appointment exists and student is the owner
+    const appointmentCheck = await pool.query(
+      'SELECT * FROM appointments WHERE id = $1 AND student_id = $2',
+      [id, req.user.id]
+    );
+
+    if (appointmentCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'ไม่พบนัดหมายนี้'
+      });
+    }
+
+    const appointment = appointmentCheck.rows[0];
+
+    // Check if appointment is pending student confirmation
+    if (appointment.status !== 'pending_student_confirmation') {
+      return res.status(400).json({
+        success: false,
+        message: 'นัดหมายนี้ไม่ได้รอการยืนยันจากนักศึกษา'
+      });
+    }
+
+    // Update status to rejected
+    const result = await pool.query(
+      'UPDATE appointments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      ['rejected', id]
+    );
+
+    const updatedAppointment = result.rows[0];
+
+    // Send notification to advisor
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, title, message, related_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        appointment.advisor_id,
+        'appointment_change_rejected',
+        'นักศึกษาปฏิเสธการเปลี่ยนแปลง',
+        `นักศึกษาปฏิเสธการเปลี่ยนแปลงนัดหมาย`,
+        id
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: 'ปฏิเสธการเปลี่ยนแปลงนัดหมายเรียบร้อยแล้ว',
+      data: {
+        id: updatedAppointment.id,
+        title: updatedAppointment.title,
+        date: updatedAppointment.date,
+        time: updatedAppointment.time,
+        location: updatedAppointment.location,
+        notes: updatedAppointment.notes,
+        status: updatedAppointment.status,
+        studentId: updatedAppointment.student_id,
+        advisorId: updatedAppointment.advisor_id,
+        projectId: updatedAppointment.project_id
+      }
+    });
+  } catch (error) {
+    console.error('Reject changes error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'เกิดข้อผิดพลาดในการปฏิเสธการเปลี่ยนแปลง'
+    });
+  }
+});
+
+// Advisor rejects student's changes
+router.put('/:id/advisor-reject-changes', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if appointment exists and user is the advisor
+    const appointmentCheck = await pool.query(
+      'SELECT * FROM appointments WHERE id = $1 AND advisor_id = $2',
+      [id, req.user.id]
+    );
+
+    if (appointmentCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'ไม่พบนัดหมายนี้'
+      });
+    }
+
+    const appointment = appointmentCheck.rows[0];
+
+    // Check if appointment is pending advisor confirmation
+    if (appointment.status !== 'pending_advisor_confirmation') {
+      return res.status(400).json({
+        success: false,
+        message: 'นัดหมายนี้ไม่ได้รอการยืนยันจากอาจารย์'
+      });
+    }
+
+    // Update status to rejected
+    const result = await pool.query(
+      'UPDATE appointments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      ['rejected', id]
+    );
+
+    const updatedAppointment = result.rows[0];
+
+    // Send notification to student(s)
+    if (appointment.student_id) {
+      // Specific student appointment
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, message, related_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          appointment.student_id,
+          'appointment_change_rejected',
+          'อาจารย์ปฏิเสธการเปลี่ยนแปลง',
+          `อาจารย์ปฏิเสธการเปลี่ยนแปลงนัดหมาย`,
+          id
+        ]
+      );
+    } else if (appointment.project_id) {
+      // Project appointment - notify all students in project
+      const studentsResult = await pool.query(
+        'SELECT student_id FROM project_students WHERE project_id = $1',
+        [appointment.project_id]
+      );
+
+      for (const student of studentsResult.rows) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, title, message, related_id)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            student.student_id,
+            'appointment_change_rejected',
+            'อาจารย์ปฏิเสธการเปลี่ยนแปลง',
+            `อาจารย์ปฏิเสธการเปลี่ยนแปลงนัดหมาย`,
+            id
+          ]
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'ปฏิเสธการเปลี่ยนแปลงนัดหมายเรียบร้อยแล้ว',
+      data: {
+        id: updatedAppointment.id,
+        title: updatedAppointment.title,
+        date: updatedAppointment.date,
+        time: updatedAppointment.time,
+        location: updatedAppointment.location,
+        notes: updatedAppointment.notes,
+        status: updatedAppointment.status,
+        studentId: updatedAppointment.student_id,
+        advisorId: updatedAppointment.advisor_id,
+        projectId: updatedAppointment.project_id
+      }
+    });
+  } catch (error) {
+    console.error('Advisor reject changes error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'เกิดข้อผิดพลาดในการปฏิเสธการเปลี่ยนแปลง'
     });
   }
 });
@@ -831,7 +1078,7 @@ router.put('/:id/status/:status', authenticateToken, async (req, res) => {
 
     const updatedAppointment = result.rows[0];
 
-    // Send notifications based on status change
+    // Send notifications and emails based on status change
     if (status === 'confirmed') {
       // Notify student
       await pool.query(
@@ -839,12 +1086,22 @@ router.put('/:id/status/:status', authenticateToken, async (req, res) => {
          VALUES ($1, $2, $3, $4, $5)`,
         [
           appointment.student_id,
-          'appointment',
+          'appointment_confirmed',
           'นัดหมายได้รับการยืนยัน',
           `นัดหมายของคุณได้รับการยืนยันแล้ว`,
           id
         ]
       );
+
+      // Send email to student (non-blocking)
+      pool.query('SELECT * FROM users WHERE id = $1', [appointment.student_id])
+        .then(studentResult => {
+          if (studentResult.rows.length > 0) {
+            emailService.sendAppointmentConfirmedEmail(updatedAppointment, studentResult.rows[0])
+              .catch(err => console.error('Email send error:', err));
+          }
+        })
+        .catch(err => console.error('Query error:', err));
     } else if (status === 'rejected') {
       // Notify student
       await pool.query(
@@ -852,12 +1109,71 @@ router.put('/:id/status/:status', authenticateToken, async (req, res) => {
          VALUES ($1, $2, $3, $4, $5)`,
         [
           appointment.student_id,
-          'appointment',
+          'appointment_rejected',
           'นัดหมายถูกปฏิเสธ',
           `นัดหมายของคุณถูกปฏิเสธ`,
           id
         ]
       );
+
+      // Send email to student (non-blocking)
+      pool.query('SELECT * FROM users WHERE id = $1', [appointment.student_id])
+        .then(studentResult => {
+          if (studentResult.rows.length > 0) {
+            emailService.sendAppointmentRejectedEmail(updatedAppointment, studentResult.rows[0])
+              .catch(err => console.error('Email send error:', err));
+          }
+        })
+        .catch(err => console.error('Query error:', err));
+    } else if (status === 'cancelled') {
+      // Notify both student and advisor about cancellation
+      if (appointment.student_id) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, title, message, related_id)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            appointment.student_id,
+            'appointment',
+            'นัดหมายถูกยกเลิก',
+            `นัดหมายของคุณถูกยกเลิก`,
+            id
+          ]
+        );
+
+        // Send email to student (non-blocking)
+        pool.query('SELECT * FROM users WHERE id = $1', [appointment.student_id])
+          .then(studentResult => {
+            if (studentResult.rows.length > 0) {
+              emailService.sendAppointmentCancelledEmail(updatedAppointment, studentResult.rows[0])
+                .catch(err => console.error('Email send error:', err));
+            }
+          })
+          .catch(err => console.error('Query error:', err));
+      }
+
+      if (appointment.advisor_id) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, title, message, related_id)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            appointment.advisor_id,
+            'appointment',
+            'นัดหมายถูกยกเลิก',
+            `นัดหมายถูกยกเลิก`,
+            id
+          ]
+        );
+
+        // Send email to advisor (non-blocking)
+        pool.query('SELECT * FROM users WHERE id = $1', [appointment.advisor_id])
+          .then(advisorResult => {
+            if (advisorResult.rows.length > 0) {
+              emailService.sendAppointmentCancelledEmail(updatedAppointment, advisorResult.rows[0])
+                .catch(err => console.error('Email send error:', err));
+            }
+          })
+          .catch(err => console.error('Query error:', err));
+      }
     }
 
     res.json({
@@ -1087,6 +1403,16 @@ router.put('/:id/accept', authenticateToken, async (req, res) => {
       [appointment.advisor_id, 'appointment_accepted', 'นัดหมายได้รับการยอมรับ', 'นัดหมายได้รับการยอมรับจากนักศึกษา', appointment.id]
     );
 
+    // Send email to advisor (non-blocking)
+    pool.query('SELECT * FROM users WHERE id = $1', [appointment.advisor_id])
+      .then(advisorResult => {
+        if (advisorResult.rows.length > 0) {
+          emailService.sendAppointmentConfirmedEmail(updatedAppointment, advisorResult.rows[0])
+            .catch(err => console.error('Email send error:', err));
+        }
+      })
+      .catch(err => console.error('Query error:', err));
+
     res.json({
       success: true,
       data: {
@@ -1165,6 +1491,16 @@ router.put('/:id/student-reject', authenticateToken, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
       [appointment.advisor_id, 'appointment_rejected', 'นัดหมายถูกปฏิเสธ', rejectionMessage, appointment.id]
     );
+
+    // Send email to advisor (non-blocking)
+    pool.query('SELECT * FROM users WHERE id = $1', [appointment.advisor_id])
+      .then(advisorResult => {
+        if (advisorResult.rows.length > 0) {
+          emailService.sendAppointmentRejectedEmail(updatedAppointment, advisorResult.rows[0])
+            .catch(err => console.error('Email send error:', err));
+        }
+      })
+      .catch(err => console.error('Query error:', err));
 
     res.json({
       success: true,

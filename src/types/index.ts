@@ -24,11 +24,12 @@ export interface Project {
 
 export interface Appointment {
   id: string;
+  title?: string;
   date: Date;
   time: string;
   location: string;
   notes?: string;
-  status: 'pending' | 'confirmed' | 'rejected' | 'cancelled' | 'completed' | 'failed';
+  status: 'pending' | 'confirmed' | 'rejected' | 'cancelled' | 'completed' | 'failed' | 'pending_student_confirmation' | 'pending_advisor_confirmation' | 'no_response';
   studentId: string;
   advisorId: string;
   projectId?: string;

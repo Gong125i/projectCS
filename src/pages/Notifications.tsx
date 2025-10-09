@@ -16,14 +16,30 @@ const Notifications: React.FC = () => {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'appointment_reminder':
-        return <Clock className="h-5 w-5 text-blue-500" />;
+      case 'appointment':
+        return <AlertCircle className="h-5 w-5 text-blue-500" />;
       case 'appointment_request':
         return <AlertCircle className="h-5 w-5 text-yellow-500" />;
+      case 'appointment_accepted':
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
       case 'appointment_confirmed':
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case 'appointment_rejected':
         return <XCircle className="h-5 w-5 text-red-500" />;
+      case 'appointment_change_confirmed':
+        return <CheckCircle className="h-5 w-5 text-blue-500" />;
+      case 'appointment_change_rejected':
+        return <XCircle className="h-5 w-5 text-red-500" />;
+      case 'pending':
+        return <Clock className="h-5 w-5 text-yellow-500" />;
+      case 'confirmed':
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
+      case 'rejected':
+        return <XCircle className="h-5 w-5 text-red-500" />;
+      case 'completed':
+        return <CheckCircle className="h-5 w-5 text-green-600" />;
+      case 'failed':
+        return <XCircle className="h-5 w-5 text-red-600" />;
       default:
         return <Bell className="h-5 w-5 text-gray-500" />;
     }
@@ -31,14 +47,30 @@ const Notifications: React.FC = () => {
 
   const getNotificationTypeText = (type: string) => {
     switch (type) {
-      case 'appointment_reminder':
-        return 'แจ้งเตือนนัดหมาย';
+      case 'appointment':
+        return 'มีการแก้ไขการนัดหมาย';
       case 'appointment_request':
-        return 'คำขอการนัดหมาย';
+        return 'มีการนัดหมายใหม่';
+      case 'appointment_accepted':
+        return 'นักศึกษาตอบรับนัดหมาย';
       case 'appointment_confirmed':
-        return 'ยืนยันการนัดหมาย';
+        return 'นัดหมายได้รับการยืนยัน';
       case 'appointment_rejected':
-        return 'ปฏิเสธการนัดหมาย';
+        return 'นัดหมายถูกปฏิเสธ';
+      case 'appointment_change_confirmed':
+        return 'ยืนยันการเปลี่ยนแปลง';
+      case 'appointment_change_rejected':
+        return 'ปฏิเสธการเปลี่ยนแปลง';
+      case 'pending':
+        return 'รอดำเนินการ';
+      case 'confirmed':
+        return 'ยืนยันแล้ว';
+      case 'rejected':
+        return 'ปฏิเสธแล้ว';
+      case 'completed':
+        return 'เสร็จสิ้น';
+      case 'failed':
+        return 'ไม่มาตามนัด';
       default:
         return type;
     }
@@ -96,9 +128,17 @@ const Notifications: React.FC = () => {
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        notification.type === 'appointment_request' ? 'bg-yellow-100 text-yellow-800' :
+                        notification.type === 'appointment_accepted' ? 'bg-green-100 text-green-800' :
                         notification.type === 'appointment_confirmed' ? 'bg-green-100 text-green-800' :
                         notification.type === 'appointment_rejected' ? 'bg-red-100 text-red-800' :
-                        notification.type === 'appointment_request' ? 'bg-yellow-100 text-yellow-800' :
+                        notification.type === 'appointment_change_confirmed' ? 'bg-blue-100 text-blue-800' :
+                        notification.type === 'appointment_change_rejected' ? 'bg-red-100 text-red-800' :
+                        notification.type === 'confirmed' ? 'bg-green-100 text-green-800' :
+                        notification.type === 'rejected' ? 'bg-red-100 text-red-800' :
+                        notification.type === 'completed' ? 'bg-green-100 text-green-800' :
+                        notification.type === 'failed' ? 'bg-red-100 text-red-800' :
+                        notification.type === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-blue-100 text-blue-800'
                       }`}>
                         {getNotificationTypeText(notification.type)}
