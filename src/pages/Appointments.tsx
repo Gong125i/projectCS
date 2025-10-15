@@ -2,14 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import { appointmentAPI, projectAPI } from '../services/api';
-import type { Appointment, Project } from '../types/index.js';
+import type { Appointment, Project, UpdateAppointmentData } from '../types/index.js';
 import { 
   Plus, 
   Calendar, 
   Clock, 
   MapPin, 
   Edit, 
-  Trash2, 
   CheckCircle, 
   XCircle,
   AlertCircle
@@ -131,13 +130,13 @@ const Appointments: React.FC = () => {
     if (!selectedAppointment) return;
     
     try {
-      let appointmentData;
+      let appointmentData: UpdateAppointmentData | null = null;
       
       if (user?.role === 'advisor') {
         // Advisor updates appointment
         appointmentData = {
           ...formData,
-          date: new Date(formData.date),
+          date: formData.date,
           advisorId: user.id
         };
       } else if (user) {
@@ -153,7 +152,7 @@ const Appointments: React.FC = () => {
         
         appointmentData = {
           title: formData.title,
-          date: new Date(formData.date),
+          date: formData.date,
           time: formData.time,
           location: formData.location,
           notes: formData.notes,
@@ -177,16 +176,6 @@ const Appointments: React.FC = () => {
     }
   };
 
-  const handleDeleteAppointment = async (appointmentId: string) => {
-    if (window.confirm('คุณแน่ใจหรือไม่ที่จะลบนัดหมายนี้?')) {
-      try {
-        await appointmentAPI.deleteAppointment(appointmentId);
-        fetchData();
-      } catch (error) {
-        console.error('Failed to delete appointment:', error);
-      }
-    }
-  };
 
   const handleStatusChange = async (appointmentId: string, status: 'confirm' | 'reject') => {
     try {
@@ -635,7 +624,7 @@ const Appointments: React.FC = () => {
                         </button>
                       </>
                     )}
-                    {/* ไม่แสดงปุ่มแก้ไขและลบเมื่อนัดหมายอยู่ในสถานะสุดท้ายหรือรอการยืนยัน */}
+                    {/* ไม่แสดงปุ่มแก้ไขเมื่อนัดหมายอยู่ในสถานะสุดท้ายหรือรอการยืนยัน */}
                     {!['pending', 'completed', 'failed', 'rejected', 'no_response', 'pending_student_confirmation', 'pending_advisor_confirmation'].includes(appointment.status) && (
                       <>
                     <button
@@ -655,13 +644,6 @@ const Appointments: React.FC = () => {
                     >
                       <Edit className="h-3 w-3 mr-1" />
                       แก้ไข
-                    </button>
-                    <button
-                      onClick={() => handleDeleteAppointment(appointment.id)}
-                      className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
-                    >
-                      <Trash2 className="h-3 w-3 mr-1" />
-                      ลบ
                     </button>
                       </>
                     )}

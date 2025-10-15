@@ -1,18 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNotifications } from '../contexts/NotificationContext';
 import { appointmentAPI, projectAPI } from '../services/api';
-import type { Appointment, Project } from '../types/index';
+import type { Appointment, Project, UpdateAppointmentData } from '../types/index';
 import { 
   Calendar, 
   Clock, 
   CheckCircle,
-  XCircle,
   AlertCircle,
-  FolderOpen,
-  Bell,
-  MapPin,
-  Edit
+  FolderOpen
 } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -20,7 +15,6 @@ import { useNavigate } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const { notifications } = useNotifications();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,7 +70,7 @@ const Dashboard: React.FC = () => {
   const upcomingAppointments = appointments
     .filter(apt => {
       try {
-        const aptDate = parseISO(apt.date);
+        const aptDate = typeof apt.date === 'string' ? parseISO(apt.date) : apt.date;
         const today = new Date();
         return apt.status === 'confirmed' && aptDate >= today;
       } catch {
@@ -91,29 +85,14 @@ const Dashboard: React.FC = () => {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 3);
 
-  const recentNotifications = notifications
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 5);
-
-  const getDateLabel = (date: string) => {
+  const getDateLabel = (date: string | Date) => {
     try {
-      const aptDate = parseISO(date);
+      const aptDate = typeof date === 'string' ? parseISO(date) : date;
       if (isToday(aptDate)) return 'วันนี้';
       if (isTomorrow(aptDate)) return 'พรุ่งนี้';
       return format(aptDate, 'dd MMM yyyy', { locale: th });
     } catch {
-      return date;
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'pending':
-        return <Clock className="h-4 w-4 text-yellow-600" />;
-      default:
-        return <AlertCircle className="h-4 w-4 text-gray-600" />;
+      return String(date);
     }
   };
 
@@ -197,13 +176,13 @@ const Dashboard: React.FC = () => {
     if (!selectedAppointment) return;
     
     try {
-      let appointmentData;
+      let appointmentData: UpdateAppointmentData | null = null;
       
       if (user?.role === 'advisor') {
         // Advisor updates appointment
         appointmentData = {
           ...formData,
-          date: new Date(formData.date),
+          date: formData.date,
           advisorId: user.id
         };
       } else if (user) {
@@ -219,7 +198,7 @@ const Dashboard: React.FC = () => {
         
         appointmentData = {
           title: formData.title,
-          date: new Date(formData.date),
+          date: formData.date,
           time: formData.time,
           location: formData.location,
           notes: formData.notes,
@@ -400,7 +379,7 @@ const Dashboard: React.FC = () => {
                           setSelectedAppointment(appointment);
                           setFormData({
                             title: appointment.title || '',
-                            date: format(parseISO(appointment.date), 'yyyy-MM-dd'),
+                            date: format(typeof appointment.date === 'string' ? parseISO(appointment.date) : appointment.date, 'yyyy-MM-dd'),
                             time: appointment.time,
                             location: appointment.location,
                             notes: appointment.notes || '',
@@ -448,7 +427,7 @@ const Dashboard: React.FC = () => {
                     <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
                           <span className={`text-sm font-medium ${
-                            isToday(parseISO(appointment.date))
+                            isToday(typeof appointment.date === 'string' ? parseISO(appointment.date) : appointment.date)
                               ? 'text-red-600'
                               : 'text-gray-900'
                           }`}>
@@ -572,12 +551,6 @@ const Dashboard: React.FC = () => {
                         <span>เสร็จสิ้น:</span>
                         <span className="font-medium text-green-600">{completedCount} ครั้ง</span>
                       </div>
-                      {project.academicYear && (
-                        <div className="flex items-center justify-between">
-                          <span>ปีการศึกษา:</span>
-                          <span className="font-medium">{project.academicYear}</span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 );

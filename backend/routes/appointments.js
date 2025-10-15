@@ -563,11 +563,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
       // If appointment has student_id, notify that student
       if (appointment.student_id) {
         await pool.query(
-          `INSERT INTO notifications (user_id, type, title, message, related_id)
+          `INSERT INTO notifications (user_id, type, title, message, appointment_id)
            VALUES ($1, $2, $3, $4, $5)`,
           [
             appointment.student_id,
-            'appointment',
+            'appointment_updated',
             'อาจารย์แก้ไขนัดหมาย',
             `อาจารย์ได้แก้ไขนัดหมายของคุณ กรุณายืนยันการเปลี่ยนแปลง`,
             id
@@ -595,11 +595,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
         // Insert all notifications at once
         const notificationPromises = studentsResult.rows.map(student =>
           pool.query(
-            `INSERT INTO notifications (user_id, type, title, message, related_id)
+            `INSERT INTO notifications (user_id, type, title, message, appointment_id)
              VALUES ($1, $2, $3, $4, $5)`,
             [
               student.id,
-              'appointment',
+              'appointment_updated',
               'อาจารย์แก้ไขนัดหมาย',
               `อาจารย์ได้แก้ไขนัดหมายของโปรเจค กรุณายืนยันการเปลี่ยนแปลง`,
               id
@@ -619,17 +619,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
     
     // Send notification and email to advisor if student edited the appointment
     if (newStatus === 'pending_advisor_confirmation' && appointment.advisor_id) {
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, title, message, related_id)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [
-          appointment.advisor_id,
-          'appointment',
-          'นักศึกษาแก้ไขนัดหมาย',
-          `นักศึกษาได้แก้ไขนัดหมาย กรุณายืนยันการเปลี่ยนแปลง`,
-          id
-        ]
-      );
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, title, message, appointment_id)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            appointment.advisor_id,
+            'appointment_updated',
+            'นักศึกษาแก้ไขนัดหมาย',
+            `นักศึกษาได้แก้ไขนัดหมาย กรุณายืนยันการเปลี่ยนแปลง`,
+            id
+          ]
+        );
 
       // Send email to advisor (non-blocking)
       pool.query('SELECT * FROM users WHERE id = $1', [appointment.advisor_id])
@@ -1129,11 +1129,11 @@ router.put('/:id/status/:status', authenticateToken, async (req, res) => {
       // Notify both student and advisor about cancellation
       if (appointment.student_id) {
         await pool.query(
-          `INSERT INTO notifications (user_id, type, title, message, related_id)
+          `INSERT INTO notifications (user_id, type, title, message, appointment_id)
            VALUES ($1, $2, $3, $4, $5)`,
           [
             appointment.student_id,
-            'appointment',
+            'appointment_cancelled',
             'นัดหมายถูกยกเลิก',
             `นัดหมายของคุณถูกยกเลิก`,
             id
@@ -1153,11 +1153,11 @@ router.put('/:id/status/:status', authenticateToken, async (req, res) => {
 
       if (appointment.advisor_id) {
         await pool.query(
-          `INSERT INTO notifications (user_id, type, title, message, related_id)
+          `INSERT INTO notifications (user_id, type, title, message, appointment_id)
            VALUES ($1, $2, $3, $4, $5)`,
           [
             appointment.advisor_id,
-            'appointment',
+            'appointment_cancelled',
             'นัดหมายถูกยกเลิก',
             `นัดหมายถูกยกเลิก`,
             id
@@ -1322,12 +1322,49 @@ router.put('/:id/reject', authenticateToken, async (req, res) => {
 
     const appointment = result.rows[0];
 
-    // Create notification for student
-    await pool.query(
-      `INSERT INTO notifications (user_id, type, title, message, appointment_id)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [appointment.student_id, 'appointment_rejected', 'นัดหมายถูกปฏิเสธ', 'นัดหมายของคุณถูกปฏิเสธ', appointment.id]
-    );
+    // Create notification for student(s)
+    if (appointment.student_id) {
+      // Specific student appointment
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, message, appointment_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [appointment.student_id, 'appointment_rejected', 'นัดหมายถูกปฏิเสธ', 'นัดหมายของคุณถูกปฏิเสธ', appointment.id]
+      );
+
+      // Send email to student (non-blocking)
+      pool.query('SELECT * FROM users WHERE id = $1', [appointment.student_id])
+        .then(studentResult => {
+          if (studentResult.rows.length > 0) {
+            emailService.sendAppointmentRejectedEmail(appointment, studentResult.rows[0])
+              .catch(err => console.error('Email send error:', err));
+          }
+        })
+        .catch(err => console.error('Query error:', err));
+    } else if (appointment.project_id) {
+      // Project appointment - notify all students in project
+      const studentsResult = await pool.query(
+        'SELECT student_id FROM project_students WHERE project_id = $1',
+        [appointment.project_id]
+      );
+
+      for (const student of studentsResult.rows) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, title, message, appointment_id)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [student.student_id, 'appointment_rejected', 'นัดหมายถูกปฏิเสธ', 'นัดหมายของคุณถูกปฏิเสธ', appointment.id]
+        );
+
+        // Send email to each student (non-blocking)
+        pool.query('SELECT * FROM users WHERE id = $1', [student.student_id])
+          .then(studentResult => {
+            if (studentResult.rows.length > 0) {
+              emailService.sendAppointmentRejectedEmail(appointment, studentResult.rows[0])
+                .catch(err => console.error('Email send error:', err));
+            }
+          })
+          .catch(err => console.error('Query error:', err));
+      }
+    }
 
     res.json({
       success: true,

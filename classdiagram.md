@@ -316,7 +316,7 @@ Class Diagram นี้แสดงโครงสร้างของระบ
 **คำอธิบาย Class Appointment:**
 - **วัตถุประสงค์**: เก็บข้อมูลการนัดหมายระหว่างนักศึกษาและอาจารย์
 - **หน้าที่หลัก**: จัดการการนัดหมาย ติดตามสถานะ และควบคุมการเปลี่ยนแปลง
-- **ความสัมพันธ์**: เชื่อมโยงกับ User (student/advisor), Project, Comment, และ Notification
+- **ความสัมพันธ์**: เชื่อมโยงกับ User (student/advisor), Project, Comment, AppointmentRecord, และ Notification
 
 #### Comment
 ```
@@ -365,6 +365,56 @@ Class Diagram นี้แสดงโครงสร้างของระบ
 - **วัตถุประสงค์**: เก็บความคิดเห็นเกี่ยวกับการนัดหมาย
 - **หน้าที่หลัก**: จัดการความคิดเห็น การแสดงผล และการแก้ไข
 - **ความสัมพันธ์**: เชื่อมโยงกับ Appointment และ User (ผู้เขียนความคิดเห็น)
+
+#### AppointmentRecord
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            AppointmentRecord                                   │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ - id: String                                                                   │
+│ - appointmentId: String                                                        │
+│ - content: String                                                              │
+│ - userId: String                                                               │
+│ - createdAt: Date                                                              │
+│ - updatedAt: Date                                                              │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ + getFormattedDate(): String                                                   │
+│ + getAuthorName(): String                                                      │
+│ + canBeEdited(userId: String): Boolean                                         │
+│ + updateContent(content: String): void                                         │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Attributes:**
+- `id: String` - Primary Key - รหัสบันทึกการนัดหมาย
+- `appointmentId: String` - Foreign Key - รหัสการนัดหมาย
+- `content: String` - เนื้อหาบันทึกการนัดหมาย
+- `userId: String` - Foreign Key - รหัสผู้เขียนบันทึก
+- `createdAt: Date` - วันที่สร้างบันทึก
+- `updatedAt: Date` - วันที่อัปเดตบันทึกล่าสุด
+
+**Methods:**
+- `getFormattedDate(): String` - คืนค่าวันที่ในรูปแบบที่อ่านได้
+  - Params: ไม่มี
+  - Returns: String - วันที่ในรูปแบบที่อ่านได้
+  - Example: "15 มกราคม 2567 เวลา 16:45"
+- `getAuthorName(): String` - คืนค่าชื่อผู้เขียนบันทึก
+  - Params: ไม่มี
+  - Returns: String - ชื่อผู้เขียนบันทึก
+  - Example: "อาจารย์สมชาย ใจดี"
+- `canBeEdited(userId: String): Boolean` - ตรวจสอบว่าสามารถแก้ไขได้หรือไม่
+  - Params: userId (String) - รหัสผู้ใช้ที่ต้องการตรวจสอบ
+  - Returns: Boolean - true ถ้าแก้ไขได้, false ถ้าแก้ไขไม่ได้
+  - Example: canBeEdited("USER002") → true (ถ้าเป็นเจ้าของบันทึก)
+- `updateContent(content: String): void` - อัปเดตเนื้อหาบันทึก
+  - Params: content (String) - เนื้อหาใหม่ที่ต้องการอัปเดต
+  - Returns: void - ไม่คืนค่า
+  - Example: updateContent("บันทึกผลการนัดหมายที่อัปเดตแล้ว")
+
+**คำอธิบาย Class AppointmentRecord:**
+- **วัตถุประสงค์**: เก็บบันทึกผลการนัดหมายหลังจากเสร็จสิ้น
+- **หน้าที่หลัก**: จัดการบันทึกการนัดหมาย การแสดงผล และการแก้ไข
+- **ความสัมพันธ์**: เชื่อมโยงกับ Appointment และ User (ผู้เขียนบันทึก)
 
 #### Notification
 ```
@@ -688,6 +738,7 @@ Class Diagram นี้แสดงโครงสร้างของระบ
 │   │                └───1──── 0..*── Appointment                               │
 │   │                           │                                               │
 │   │                           ├───1──── 0..*── Comment                       │
+│   │                           └───1──── 0..*── AppointmentRecord             │
 │   │                                                                           │
 │   ├───1──── 0..*── Notification                                              │
 │   ├───1──── 0..*── ImportRecord                                              │
@@ -709,16 +760,17 @@ Class Diagram นี้แสดงโครงสร้างของระบ
 
 ## 📊 Entity Summary
 
-### **Entity Classes (9 classes)**
+### **Entity Classes (10 classes)**
 1. **User** - ผู้ใช้ (11 attributes, 5 methods)
 2. **Project** - โปรเจค (9 attributes, 6 methods)
 3. **Appointment** - การนัดหมาย (11 attributes, 8 methods)
 4. **Comment** - ความคิดเห็น (5 attributes, 4 methods)
-5. **Notification** - การแจ้งเตือน (8 attributes, 5 methods)
-6. **ArchivedProject** - โปรเจคที่จัดเก็บ (18 attributes, 8 methods)
-7. **ProjectStudent** - Junction Table (3 attributes, 3 methods)
-8. **ImportRecord** - บันทึกการนำเข้าข้อมูล (8 attributes, 4 methods)
-9. **EmailTemplate** - เทมเพลตอีเมล (8 attributes, 5 methods)
+5. **AppointmentRecord** - บันทึกการนัดหมาย (6 attributes, 4 methods)
+6. **Notification** - การแจ้งเตือน (8 attributes, 5 methods)
+7. **ArchivedProject** - โปรเจคที่จัดเก็บ (18 attributes, 8 methods)
+8. **ProjectStudent** - Junction Table (3 attributes, 3 methods)
+9. **ImportRecord** - บันทึกการนำเข้าข้อมูล (8 attributes, 4 methods)
+10. **EmailTemplate** - เทมเพลตอีเมล (8 attributes, 5 methods)
 
 ### **Enumeration Classes (5 classes)**
 1. **RoleEnum** - บทบาทผู้ใช้ (student, advisor)
@@ -750,7 +802,7 @@ Class Diagram นี้แสดงโครงสร้างของระบ
 - **projects** - ข้อมูลโปรเจค
 - **project_students** - ความสัมพันธ์โปรเจค-นักศึกษา
 - **appointments** - ข้อมูลการนัดหมาย
-- **comments** - ความคิดเห็นการนัดหมาย
+- **appointment_records** - บันทึกการนัดหมาย
 - **notifications** - การแจ้งเตือน
 - **project_archive** - โปรเจคที่จัดเก็บแล้ว
 - **import_records** - บันทึกการนำเข้าข้อมูล

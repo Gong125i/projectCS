@@ -18,6 +18,9 @@ export interface Project {
   advisorId: string;
   advisor: User;
   students: User[];
+  academicYear?: string;
+  semester?: string;
+  status?: 'active' | 'completed' | 'archived';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,6 +44,16 @@ export interface Appointment {
   updatedAt: Date;
 }
 
+export interface UpdateAppointmentData {
+  title?: string;
+  date?: string;
+  time?: string;
+  location?: string;
+  notes?: string;
+  advisorId?: string;
+  projectId?: string;
+}
+
 export interface Comment {
   id: string;
   content: string;
@@ -53,7 +66,9 @@ export interface Comment {
 export interface Notification {
   id: string;
   userId: string;
-  type: 'appointment_reminder' | 'appointment_request' | 'appointment_confirmed' | 'appointment_rejected';
+  type: 'appointment_reminder' | 'appointment_request' | 'appointment_confirmed' | 'appointment_rejected' | 
+        'appointment_accepted' | 'appointment_change_confirmed' | 'appointment_change_rejected' | 
+        'appointment_updated' | 'appointment_cancelled' | 'appointment' | 'pending' | 'confirmed' | 'rejected' | 'completed' | 'failed';
   title: string;
   message: string;
   isRead: boolean;

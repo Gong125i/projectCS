@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { projectAPI, userAPI } from '../services/api';
-import type { Project, User } from '../types/index.js';
+import { projectAPI } from '../services/api';
+import type { Project } from '../types/index.js';
 import { 
   Plus, 
   Edit, 
   Trash2, 
-  Users, 
   UserPlus, 
   UserMinus,
   FolderOpen,
@@ -20,7 +19,6 @@ const Projects: React.FC = () => {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -46,25 +44,10 @@ const Projects: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const promises = [
-        projectAPI.getProjects()
-      ];
+      const projects = await projectAPI.getProjects();
+      setProjects(projects);
+      setFilteredProjects(projects);
       
-      // Only fetch users if user is advisor
-      if (user?.role === 'advisor') {
-        promises.push(userAPI.getUsers());
-      }
-      
-      const results = await Promise.all(promises);
-      setProjects(results[0]);
-      setFilteredProjects(results[0]);
-      
-      // Set users only if user is advisor
-      if (user?.role === 'advisor') {
-        setUsers(results[1]);
-      } else {
-        setUsers([]);
-      }
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -106,7 +89,7 @@ const Projects: React.FC = () => {
     projects
       .map(p => p.academicYear)
       .filter(year => year)
-  )).sort((a, b) => b.localeCompare(a)); // Sort descending
+  )).sort((a, b) => (b || '').localeCompare(a || '')); // Sort descending
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,7 +164,6 @@ const Projects: React.FC = () => {
     }
   };
 
-  const availableStudents = users.filter(u => u.role === 'student');
 
   if (loading) {
     return (
@@ -312,17 +294,15 @@ const Projects: React.FC = () => {
                 <p className="text-sm text-gray-600">
                   <strong>สถานะ:</strong> 
                   <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    project.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                    project.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                    project.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                    project.status === 'active' ? 'bg-green-100 text-green-800' :
                     project.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800'
+                    project.status === 'archived' ? 'bg-gray-100 text-gray-800' :
+                    'bg-yellow-100 text-yellow-800'
                   }`}>
-                    {project.status === 'accepted' ? 'รับแล้ว' :
-                     project.status === 'pending' ? 'รอดำเนินการ' :
-                     project.status === 'rejected' ? 'ปฏิเสธ' :
+                    {project.status === 'active' ? 'ใช้งานอยู่' :
                      project.status === 'completed' ? 'เสร็จสิ้น' :
-                     project.status}
+                     project.status === 'archived' ? 'เก็บถาวร' :
+                     'ไม่ระบุ'}
                   </span>
                 </p>
               )}

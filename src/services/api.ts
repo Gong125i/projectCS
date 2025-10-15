@@ -7,7 +7,8 @@ import type {
   Notification, 
   LoginCredentials, 
   AuthResponse,
-  ApiResponse 
+  ApiResponse,
+  UpdateAppointmentData
 } from '../types/index.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -124,7 +125,7 @@ export const appointmentAPI = {
     return response.data.data!;
   },
   
-  updateAppointment: async (appointmentId: string, data: Partial<Appointment>): Promise<Appointment> => {
+  updateAppointment: async (appointmentId: string, data: UpdateAppointmentData): Promise<Appointment> => {
     const response = await api.put<ApiResponse<Appointment>>(`/appointments/${appointmentId}`, data);
     return response.data.data!;
   },
